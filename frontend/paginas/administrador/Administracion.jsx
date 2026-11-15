@@ -1,0 +1,13 @@
+import React,{useEffect,useState} from 'react';
+import {get,post,patch,token} from '../../servicios/api.js';
+import Mensaje from '../../componentes/comunes/Mensaje.jsx';
+export default function Administracion(){
+ const [usuarios,setUsuarios]=useState([]),[verifs,setVerifs]=useState([]),[error,setError]=useState(''),[mensaje,setMensaje]=useState('');
+ async function cargar(){try{const [u,v]=await Promise.all([get('/administracion/usuarios'),get('/administracion/verificaciones')]);setUsuarios(u);setVerifs(v)}catch(e){setError(e.message)}}
+ useEffect(()=>{cargar()},[]);
+ async function revisar(v,decision){setError('');const observacion=decision==='rechazada'?prompt('Motivo del rechazo:'):'';if(decision==='rechazada'&&!observacion)return;try{await post(`/administracion/verificaciones/${v.verificacion_id}/revision`,{decision,observacion});setMensaje('Revisión guardada');await cargar()}catch(e){setError(e.message)}}
+ async function cambiarEstado(u){const nuevo=prompt('Nuevo estado: pendiente, verificada o suspendida',u.estado_cuenta);if(!nuevo)return;try{await patch(`/administracion/usuarios/${u.usuario_id}/estado`,{estado_cuenta:nuevo});await cargar()}catch(e){setError(e.message)}}
+ async function verDocumento(v){try{const r=await fetch(`/api/administracion/verificaciones/${v.verificacion_id}/documento`,{headers:{Authorization:`Bearer ${token()}`}});if(!r.ok)throw new Error('No se pudo descargar el documento');const blob=await r.blob();const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`verificacion-${v.verificacion_id}`;a.click();setTimeout(()=>URL.revokeObjectURL(url),3000)}catch(e){setError(e.message)}}
+ return <main className="contenedor seccion"><p className="etiqueta">ADMINISTRACIÓN</p><h1>Supervisión de la plataforma</h1><Mensaje error={error} correcto={mensaje}/><h2>Verificaciones pendientes</h2><div className="rejilla">{verifs.map(v=><article className="panel mini" key={v.verificacion_id}><h3>Solicitud #{v.verificacion_id}</h3><p>Usuario #{v.usuario_id}</p><div className="acciones"><button className="btn secundario" onClick={()=>verDocumento(v)}>Ver documento</button> <button className="btn" onClick={()=>revisar(v,'aprobada')}>Aprobar</button> <button className="btn peligro" onClick={()=>revisar(v,'rechazada')}>Rechazar</button></div></article>)}</div>
+ <h2>Cuentas (máximo 100)</h2><div className="lista">{usuarios.map(u=><div className="listaItem" key={u.usuario_id}><span>{u.nombre_completo} · {u.correo} · <strong>{u.rol}</strong> · {u.estado_cuenta}</span><button className="btn secundario" onClick={()=>cambiarEstado(u)}>Cambiar estado</button></div>)}</div></main>;
+}

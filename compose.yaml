@@ -1,0 +1,58 @@
+name: plataforma_alquiler
+services:
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5434:5432"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?Define POSTGRES_DB en .env}
+      POSTGRES_USER: ${POSTGRES_USER:?Define POSTGRES_USER en .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD en .env}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./sql/01_esquema_alquiler.sql:/docker-entrypoint-initdb.d/01_esquema_alquiler.sql:ro
+    networks: [interna]
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_USER: ${POSTGRES_USER:?}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?}
+      DB_NAME: ${POSTGRES_DB:?}
+      DB_HOST: db
+      SECRET_KEY: ${SECRET_KEY:?Define SECRET_KEY en .env}
+      ACCESS_TOKEN_MINUTES: ${ACCESS_TOKEN_MINUTES:-60}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-5}
+      ARCHIVOS_DIR: /data/archivos
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - archivos_data:/data/archivos
+    networks: [interna]
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    depends_on: [backend]
+    ports:
+      - "127.0.0.1:5173:5173"
+    networks: [interna]
+
+networks:
+  interna:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  archivos_data:

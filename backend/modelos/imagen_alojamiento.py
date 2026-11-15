@@ -1,0 +1,1 @@
+from modelos.alojamiento import ImagenAlojamiento
