@@ -104,3 +104,76 @@ def test_coincidencia_sin_telefono_sigue_siendo_visible(entorno):
     coincidencias = servicio.coincidencias(1)
 
     assert coincidencias[0].telefono is None
+
+
+def test_perfil_guarda_catalogos_estructurados(entorno):
+    servicio, _ = entorno
+
+    guardado = servicio.guardar_perfil(
+        1, perfil(habito_ids=[1, 3], preferencia_ids=[1])
+    )
+
+    assert guardado.habito_ids == [1, 3]
+    assert guardado.habito_nombres == ["No fumo", "Leo"]
+    assert guardado.preferencia_ids == [1]
+    assert guardado.preferencia_nombres == ["Ambiente tranquilo"]
+
+
+def test_perfil_rechaza_catalogo_inexistente(entorno):
+    servicio, _ = entorno
+
+    with pytest.raises(SolicitudInvalida, match="hábitos"):
+        servicio.guardar_perfil(1, perfil(habito_ids=[99]))
+
+    with pytest.raises(SolicitudInvalida, match="preferencias"):
+        servicio.guardar_perfil(1, perfil(preferencia_ids=[99]))
+
+
+def test_coincidencias_calculan_compatibilidad_por_afinidad(entorno):
+    servicio, _ = entorno
+    servicio.guardar_perfil(
+        1,
+        perfil(habito_ids=[1, 2], preferencia_ids=[1], fuma=False),
+    )
+    servicio.guardar_perfil(
+        2,
+        perfil(
+            presupuesto_min=Decimal("500"),
+            habito_ids=[1, 2],
+            preferencia_ids=[1],
+            fuma=False,
+        ),
+    )
+
+    coincidencia = servicio.coincidencias(1)[0]
+
+    # 50 por presupuesto + 10 por 2 hábitos + 5 por preferencia + 5 por fumar igual.
+    assert coincidencia.compatibilidad == 70
+    assert coincidencia.habito_nombres == ("No fumo", "Hago deporte")
+    assert coincidencia.fuma is False
+
+
+def test_coincidencias_ordenan_por_compatibilidad(entorno):
+    servicio, _ = entorno
+    servicio.guardar_perfil(1, perfil(habito_ids=[1, 2, 3]))
+    servicio.guardar_perfil(2, perfil(presupuesto_min=Decimal("500")))
+    servicio.guardar_perfil(
+        3, perfil(presupuesto_min=Decimal("500"), habito_ids=[1, 2, 3])
+    )
+
+    coincidencias = servicio.coincidencias(1)
+
+    assert [c.buscador_id for c in coincidencias] == [3, 2]
+    assert coincidencias[0].compatibilidad > coincidencias[1].compatibilidad
+
+
+def test_catalogos_disponibles_para_formulario(entorno):
+    servicio, _ = entorno
+
+    habitos, preferencias = servicio.catalogos()
+
+    assert [h.nombre for h in habitos] == ["No fumo", "Hago deporte", "Leo"]
+    assert [p.nombre for p in preferencias] == [
+        "Ambiente tranquilo",
+        "Buena comunicación",
+    ]

@@ -23,7 +23,7 @@ from sqlalchemy import select
 from configuracion.base_datos import SessionLocal
 from configuracion.configuracion import settings
 from modelos.alojamiento import Alojamiento, ImagenAlojamiento
-from modelos.perfil_companero import PerfilCompanero
+from modelos.perfil_companero import CatalogoHabito, CatalogoPreferencia, PerfilCompanero
 from modelos.usuario import Usuario
 from repositorios.usuarios import RepositorioUsuariosSQLAlchemy
 from seguridad.autenticacion import hash_clave
@@ -52,6 +52,16 @@ BUSCADORES = [
             "habitos": "No fumo, soy ordenada y trabajo de día",
             "preferencias": "Ambiente tranquilo y respeto por el descanso",
             "descripcion": "Busco compartir un departamento céntrico y bien comunicado.",
+            "habitos_nombres": ["No fumo", "Soy ordenado/a", "Trabajo de día", "Leo", "Cocino"],
+            "preferencias_nombres": ["Ambiente tranquilo", "Respeto por el descanso", "Buena comunicación"],
+            "fuma": False,
+            "tiene_mascotas": False,
+            "horario": "temprano",
+            "nivel_orden": 5,
+            "ocupacion": "trabajador",
+            "genero": "femenino",
+            "genero_preferido": "indiferente",
+            "edad": 28,
         },
     },
     {
@@ -66,6 +76,16 @@ BUSCADORES = [
             "habitos": "Estudio de noche, no fumo y cocino los fines de semana",
             "preferencias": "Compañero responsable y comunicativo",
             "descripcion": "Soy estudiante de ingeniería y busco un espacio tranquilo para estudiar.",
+            "habitos_nombres": ["No fumo", "Estudio de noche", "Cocino", "Juego videojuegos", "Veo series o películas"],
+            "preferencias_nombres": ["Buena comunicación", "Limpieza compartida", "No fumar en casa"],
+            "fuma": False,
+            "tiene_mascotas": False,
+            "horario": "nocturno",
+            "nivel_orden": 3,
+            "ocupacion": "estudiante",
+            "genero": "masculino",
+            "genero_preferido": "indiferente",
+            "edad": 22,
         },
     },
     {
@@ -80,6 +100,16 @@ BUSCADORES = [
             "habitos": "Deportista, madrugo y mantengo los espacios limpios",
             "preferencias": "Buena comunicación y convivencia respetuosa",
             "descripcion": "Trabajo cerca del centro y quiero compartir un departamento.",
+            "habitos_nombres": ["No fumo", "Hago deporte", "Madrugo", "Soy ordenado/a", "Salgo con amigos"],
+            "preferencias_nombres": ["Buena comunicación", "Ambiente tranquilo", "Limpieza compartida"],
+            "fuma": False,
+            "tiene_mascotas": False,
+            "horario": "temprano",
+            "nivel_orden": 5,
+            "ocupacion": "trabajador",
+            "genero": "femenino",
+            "genero_preferido": "femenino",
+            "edad": 26,
         },
     },
 ]
@@ -300,6 +330,10 @@ def _crear_usuario(db, repo, datos, rol, ruc=None, estado="verificada"):
 
 
 def _crear_perfil(db, usuario, datos):
+    datos = dict(datos)
+    habitos_nombres = datos.pop("habitos_nombres", ())
+    preferencias_nombres = datos.pop("preferencias_nombres", ())
+
     perfil = db.scalar(
         select(PerfilCompanero).where(PerfilCompanero.buscador_id == usuario.usuario_id)
     )
@@ -308,11 +342,41 @@ def _crear_perfil(db, usuario, datos):
         db.add(perfil)
         db.flush()
         print(f"  Perfil de convivencia creado para {usuario.nombre_completo}")
-    elif any(getattr(perfil, clave) != valor for clave, valor in datos.items()):
+    else:
         for clave, valor in datos.items():
             setattr(perfil, clave, valor)
-        print(f"  Perfil de convivencia restaurado para {usuario.nombre_completo}")
+
+    if habitos_nombres:
+        seleccion = list(
+            db.scalars(
+                select(CatalogoHabito).where(
+                    CatalogoHabito.nombre.in_(habitos_nombres)
+                )
+            )
+        )
+        perfil.habitos_catalogo = seleccion
+        _avisar_faltantes("hábitos", habitos_nombres, seleccion)
+
+    if preferencias_nombres:
+        seleccion = list(
+            db.scalars(
+                select(CatalogoPreferencia).where(
+                    CatalogoPreferencia.nombre.in_(preferencias_nombres)
+                )
+            )
+        )
+        perfil.preferencias_catalogo = seleccion
+        _avisar_faltantes("preferencias", preferencias_nombres, seleccion)
+
     return perfil
+
+
+def _avisar_faltantes(tipo: str, esperados, encontrados) -> None:
+    nombres = {elemento.nombre for elemento in encontrados}
+    faltantes = sorted(set(esperados) - nombres)
+    if faltantes:
+        print(f"  Aviso: no existen en el catálogo de {tipo}: {', '.join(faltantes)}")
+
 
 
 def _sincronizar_fotos(db, publicacion, datos):

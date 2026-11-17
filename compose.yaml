@@ -17,6 +17,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./sql/01_esquema_alquiler.sql:/docker-entrypoint-initdb.d/01_esquema_alquiler.sql:ro
+      - ./sql/04_mejoras_perfil_convivencia.sql:/docker-entrypoint-initdb.d/04_mejoras_perfil_convivencia.sql:ro
     networks: [interna]
 
   backend:

@@ -151,10 +151,51 @@ class ContactoArrendadorSalida(LecturaBase):
 class PerfilEntrada(BaseModel):
     presupuesto_min: Decimal = Field(ge=0, max_digits=12, decimal_places=2)
     presupuesto_max: Decimal = Field(ge=0, max_digits=12, decimal_places=2)
+
+    # Catálogos estructurados (recomendado). None = no modificar.
+    habito_ids: list[int] | None = None
+    preferencia_ids: list[int] | None = None
+
+    # Campos tipados y acotados.
+    fuma: bool | None = None
+    tiene_mascotas: bool | None = None
+    horario: Literal['temprano', 'tarde', 'nocturno', 'flexible'] | None = None
+    nivel_orden: int | None = Field(default=None, ge=1, le=5)
+    ocupacion: Literal['estudiante', 'trabajador', 'ambos', 'otro'] | None = None
+    genero: Literal['femenino', 'masculino', 'otro', 'prefiero_no_decir'] | None = None
+    genero_preferido: Literal['femenino', 'masculino', 'mixto', 'indiferente'] | None = None
+    edad: int | None = Field(default=None, ge=18, le=99)
+
+    descripcion: str | None = Field(default=None, max_length=500)
+    estado: Literal['activo','inactivo'] = 'activo'
+
+    # Compatibilidad con clientes anteriores: texto libre opcional.
     habitos: str | None = None
     preferencias: str | None = None
-    descripcion: str | None = None
-    estado: Literal['activo','inactivo'] = 'activo'
+
+    @field_validator('habito_ids', 'preferencia_ids')
+    @classmethod
+    def catalogos_unicos(cls, valor: list[int] | None) -> list[int] | None:
+        if valor is None:
+            return None
+        if any(identificador <= 0 for identificador in valor):
+            raise ValueError('Los identificadores del catálogo deben ser positivos')
+        unicos = list(dict.fromkeys(valor))
+        if len(unicos) > 15:
+            raise ValueError('Selecciona como máximo 15 opciones por catálogo')
+        return unicos
+
+    @field_validator('descripcion')
+    @classmethod
+    def descripcion_util(cls, valor: str | None) -> str | None:
+        if valor is None:
+            return None
+        valor = valor.strip()
+        if not valor:
+            return None
+        if len(valor) < 10:
+            raise ValueError('La descripción debe tener al menos 10 caracteres')
+        return valor
 
     @model_validator(mode='after')
     def presupuesto_ordenado(self):
@@ -162,9 +203,14 @@ class PerfilEntrada(BaseModel):
             raise ValueError('El presupuesto máximo debe ser mayor o igual al mínimo')
         return self
 
+
 class PerfilSalida(PerfilEntrada, LecturaBase):
     perfil_id: int
     buscador_id: int
+    habito_nombres: list[str] = Field(default_factory=list)
+    preferencia_nombres: list[str] = Field(default_factory=list)
+    actualizado_en: datetime | None = None
+
 
 class CoincidenciaSalida(LecturaBase):
     """Perfil público de una coincidencia y su canal de contacto."""
@@ -179,6 +225,19 @@ class CoincidenciaSalida(LecturaBase):
     preferencias: str | None
     descripcion: str | None
     estado: str
+    habito_ids: list[int] = Field(default_factory=list)
+    habito_nombres: list[str] = Field(default_factory=list)
+    preferencia_ids: list[int] = Field(default_factory=list)
+    preferencia_nombres: list[str] = Field(default_factory=list)
+    fuma: bool | None = None
+    tiene_mascotas: bool | None = None
+    horario: str | None = None
+    nivel_orden: int | None = None
+    ocupacion: str | None = None
+    genero: str | None = None
+    genero_preferido: str | None = None
+    edad: int | None = None
+    compatibilidad: int = 0
     # La ruta interna no se publica; la interfaz solo necesita la URL.
     foto_perfil: bool = Field(default=False, exclude=True)
 
@@ -204,3 +263,33 @@ class RevisionEntrada(BaseModel):
 
 class EstadoCuentaEntrada(BaseModel):
     estado_cuenta: Literal['pendiente','verificada','suspendida']
+
+
+class HabitoCatalogoSalida(LecturaBase):
+    habito_id: int
+    nombre: str
+    categoria: str
+
+
+class PreferenciaCatalogoSalida(LecturaBase):
+    preferencia_id: int
+    nombre: str
+    categoria: str
+
+
+class OpcionSalida(BaseModel):
+    valor: str
+    etiqueta: str
+
+
+class OpcionesPerfilSalida(BaseModel):
+    horarios: list[OpcionSalida]
+    ocupaciones: list[OpcionSalida]
+    generos: list[OpcionSalida]
+    generos_preferidos: list[OpcionSalida]
+
+
+class CatalogosSalida(BaseModel):
+    habitos: list[HabitoCatalogoSalida]
+    preferencias: list[PreferenciaCatalogoSalida]
+    opciones: OpcionesPerfilSalida

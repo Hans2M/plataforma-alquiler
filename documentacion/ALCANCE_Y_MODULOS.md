@@ -4,7 +4,7 @@
 Búsqueda filtrada de alojamientos activos, detalle, imágenes, comodidades y destacados. No requiere registro.
 
 ## Buscador
-Registro, perfil, historial, verificación de identidad, presupuesto de convivencia, preferencias, activación y búsqueda de coincidencias.
+Registro, perfil, historial, verificación de identidad, presupuesto de convivencia, perfil estructurado (catálogos de hábitos y preferencias, estilo de vida tipado, descripción validada), activación y búsqueda de coincidencias ordenadas por compatibilidad.
 
 ## Arrendador
 Registro, gestión del perfil, alta y modificación de publicaciones propias, disponibilidad, comodidades, imágenes y verificación.

@@ -23,11 +23,26 @@ class CoincidenciaCompanero:
     telefono: str | None
     presupuesto_min: Decimal
     presupuesto_max: Decimal
+    # Texto heredado; se mantiene para clientes anteriores.
     habitos: str | None
     preferencias: str | None
     descripcion: str | None
     estado: str
     foto_perfil: bool = False
+    # Datos estructurados y compatibilidad calculada.
+    habito_ids: tuple[int, ...] = ()
+    habito_nombres: tuple[str, ...] = ()
+    preferencia_ids: tuple[int, ...] = ()
+    preferencia_nombres: tuple[str, ...] = ()
+    fuma: bool | None = None
+    tiene_mascotas: bool | None = None
+    horario: str | None = None
+    nivel_orden: int | None = None
+    ocupacion: str | None = None
+    genero: str | None = None
+    genero_preferido: str | None = None
+    edad: int | None = None
+    compatibilidad: int = 0
 
 
 @dataclass(frozen=True)

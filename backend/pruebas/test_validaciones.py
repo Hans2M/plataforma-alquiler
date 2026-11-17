@@ -116,3 +116,55 @@ def test_telefono_arrendador_exige_nueve_digitos():
             numero_documento='87654321',
             ruc='20123456789',
         )
+
+
+def test_descripcion_de_perfil_exige_minimo_diez_caracteres():
+    with pytest.raises(ValidationError, match='al menos 10 caracteres'):
+        PerfilEntrada(presupuesto_min=300, presupuesto_max=600, descripcion='Corta')
+
+
+def test_descripcion_de_perfil_se_limpia_y_acepta_texto_util():
+    datos = PerfilEntrada(
+        presupuesto_min=300,
+        presupuesto_max=600,
+        descripcion='  Busco un cuarto tranquilo y céntrico.  ',
+    )
+    assert datos.descripcion == 'Busco un cuarto tranquilo y céntrico.'
+
+
+def test_descripcion_de_perfil_limita_quinientos_caracteres():
+    with pytest.raises(ValidationError):
+        PerfilEntrada(
+            presupuesto_min=300,
+            presupuesto_max=600,
+            descripcion='x' * 501,
+        )
+
+
+def test_catalogos_de_perfil_no_admiten_duplicados():
+    datos = PerfilEntrada(
+        presupuesto_min=300,
+        presupuesto_max=600,
+        habito_ids=[1, 1, 2],
+        preferencia_ids=[3, 3],
+    )
+    assert datos.habito_ids == [1, 2]
+    assert datos.preferencia_ids == [3]
+
+
+def test_catalogos_de_perfil_limitan_cantidad():
+    with pytest.raises(ValidationError, match='máximo 15'):
+        PerfilEntrada(
+            presupuesto_min=300,
+            presupuesto_max=600,
+            habito_ids=list(range(1, 17)),
+        )
+
+
+def test_campos_tipados_de_perfil_se_validan():
+    with pytest.raises(ValidationError):
+        PerfilEntrada(presupuesto_min=300, presupuesto_max=600, nivel_orden=9)
+    with pytest.raises(ValidationError):
+        PerfilEntrada(presupuesto_min=300, presupuesto_max=600, edad=15)
+    with pytest.raises(ValidationError):
+        PerfilEntrada(presupuesto_min=300, presupuesto_max=600, horario='cualquiera')

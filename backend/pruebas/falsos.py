@@ -6,9 +6,14 @@ Permiten probar los servicios sin PostgreSQL ni SQLAlchemy.
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
+from dominio.compatibilidad import calcular_compatibilidad
 from dominio.consultas import CoincidenciaCompanero
 from modelos.alojamiento import Alojamiento, Comodidad, ImagenAlojamiento
-from modelos.perfil_companero import PerfilCompanero
+from modelos.perfil_companero import (
+    CatalogoHabito,
+    CatalogoPreferencia,
+    PerfilCompanero,
+)
 from modelos.registro_acceso import RegistroAcceso
 from modelos.usuario import Usuario
 from modelos.verificacion_identidad import VerificacionIdentidad
@@ -178,6 +183,33 @@ class RepositorioCompanerosFalso:
         self.perfiles: dict[int, PerfilCompanero] = {}
         self.contactos: dict[int, tuple[str, str | None]] = {}
         self.fotos: dict[int, bool] = {}
+        self.habitos_catalogo = [
+            CatalogoHabito(
+                habito_id=1, nombre="No fumo", categoria="convivencia", orden=10, activo=True
+            ),
+            CatalogoHabito(
+                habito_id=2, nombre="Hago deporte", categoria="ocio", orden=12, activo=True
+            ),
+            CatalogoHabito(
+                habito_id=3, nombre="Leo", categoria="ocio", orden=20, activo=True
+            ),
+        ]
+        self.preferencias_catalogo = [
+            CatalogoPreferencia(
+                preferencia_id=1,
+                nombre="Ambiente tranquilo",
+                categoria="convivencia",
+                orden=10,
+                activo=True,
+            ),
+            CatalogoPreferencia(
+                preferencia_id=2,
+                nombre="Buena comunicación",
+                categoria="convivencia",
+                orden=20,
+                activo=True,
+            ),
+        ]
         self._siguiente_id = 1
 
     def por_buscador(self, uid: int) -> PerfilCompanero | None:
@@ -211,14 +243,66 @@ class RepositorioCompanerosFalso:
                     descripcion=otro.descripcion,
                     estado=otro.estado,
                     foto_perfil=self.fotos.get(buscador_id, False),
+                    habito_ids=tuple(otro.habito_ids),
+                    habito_nombres=tuple(otro.habito_nombres),
+                    preferencia_ids=tuple(otro.preferencia_ids),
+                    preferencia_nombres=tuple(otro.preferencia_nombres),
+                    fuma=otro.fuma,
+                    tiene_mascotas=otro.tiene_mascotas,
+                    horario=otro.horario,
+                    nivel_orden=otro.nivel_orden,
+                    ocupacion=otro.ocupacion,
+                    genero=otro.genero,
+                    genero_preferido=otro.genero_preferido,
+                    edad=otro.edad,
+                    compatibilidad=calcular_compatibilidad(
+                        habito_ids_a=perfil.habito_ids,
+                        habito_ids_b=otro.habito_ids,
+                        preferencia_ids_a=perfil.preferencia_ids,
+                        preferencia_ids_b=otro.preferencia_ids,
+                        fuma_a=perfil.fuma,
+                        fuma_b=otro.fuma,
+                        tiene_mascotas_a=perfil.tiene_mascotas,
+                        tiene_mascotas_b=otro.tiene_mascotas,
+                        horario_a=perfil.horario,
+                        horario_b=otro.horario,
+                        nivel_orden_a=perfil.nivel_orden,
+                        nivel_orden_b=otro.nivel_orden,
+                        ocupacion_a=perfil.ocupacion,
+                        ocupacion_b=otro.ocupacion,
+                    ),
                 )
             )
+        resultado.sort(key=lambda c: (-c.compatibilidad, c.perfil_id))
         return resultado
 
     def agregar(self, perfil: PerfilCompanero) -> None:
         perfil.perfil_id = self._siguiente_id
         self._siguiente_id += 1
         self.perfiles[perfil.buscador_id] = perfil
+
+    def catalogos(self):
+        return self.habitos_catalogo, self.preferencias_catalogo
+
+    def habitos_validos(self, ids: list[int]) -> bool:
+        disponibles = {h.habito_id for h in self.habitos_catalogo if h.activo}
+        return set(ids) <= disponibles
+
+    def preferencias_validas(self, ids: list[int]) -> bool:
+        disponibles = {p.preferencia_id for p in self.preferencias_catalogo if p.activo}
+        return set(ids) <= disponibles
+
+    def asignar_habitos(self, perfil: PerfilCompanero, ids: list[int]) -> None:
+        perfil.habitos_catalogo = [
+            habito for habito in self.habitos_catalogo if habito.habito_id in set(ids)
+        ]
+
+    def asignar_preferencias(self, perfil: PerfilCompanero, ids: list[int]) -> None:
+        perfil.preferencias_catalogo = [
+            preferencia
+            for preferencia in self.preferencias_catalogo
+            if preferencia.preferencia_id in set(ids)
+        ]
 
 
 class RepositorioVerificacionesFalso:

@@ -159,13 +159,39 @@ Con esto se refuerzan SRP y DIP en el backend. Quedan decisiones no SOLID hereda
 | `alquiler.comodidades` | Catálogo único de comodidades |
 | `alquiler.alojamiento_comodidades` | Asociación M:N, clave compuesta |
 | `alquiler.imagenes_alojamiento` | Rutas de imágenes de inmuebles |
-| `alquiler.perfiles_companero` | Presupuesto y preferencias, máximo uno por buscador |
+| `alquiler.perfiles_companero` | Presupuesto, estilo de vida tipado y descripción; máximo uno por buscador |
+| `alquiler.catalogo_habitos` | Catálogo de hábitos, rutinas y pasatiempos seleccionables |
+| `alquiler.catalogo_preferencias` | Catálogo de preferencias de convivencia |
+| `alquiler.perfil_habitos` | Asociación M:N perfil–hábito, clave compuesta |
+| `alquiler.perfil_preferencias` | Asociación M:N perfil–preferencia, clave compuesta |
 | `alquiler.verificaciones_identidad` | Solicitud, estado, revisor y observación |
 | `alquiler.registros_acceso` | Acciones de autenticación y acceso |
 
 **Integridad:** PK/FK, UNIQUE, NOT NULL, CHECK, defaults e índices. Las autorizaciones de propietario y rol se refuerzan en FastAPI; una FK por sí sola no garantiza que un revisor sea administrador.
 
 `sql/01_esquema_alquiler.sql` es el **mismo DDL de la sección 4.6**; no realiza `DROP`, no cambia otras bases y se importa automáticamente con PostgreSQL solo cuando el volumen está vacío. En futuros cambios de esquema se recomienda añadir Alembic y migraciones versionadas, en vez de editar el SQL inicial de una base ya utilizada.
+
+### 4.1 Perfil de convivencia con datos tipados
+
+`sql/04_mejoras_perfil_convivencia.sql` amplía el perfil de convivencia **de forma aditiva e idempotente** (no borra ni renombra nada):
+
+- Catálogos reutilizables `catalogo_habitos` y `catalogo_preferencias`, con categoría, orden y estado.
+- Tablas puente `perfil_habitos` y `perfil_preferencias` (M:N) que sustituyen el texto libre para el matching.
+- Columnas tipadas en `perfiles_companero`: `fuma`, `tiene_mascotas`, `horario`, `nivel_orden` (1–5), `ocupacion`, `genero`, `genero_preferido`, `edad` y `actualizado_en`.
+- Restricciones `CHECK` para cada dominio y para la descripción (10–500 caracteres en escrituras nuevas).
+- Semillas de hábitos y preferencias con `ON CONFLICT DO NOTHING`.
+
+Los campos de texto `habitos` y `preferencias` se conservan como respaldo de compatibilidad: se siguen devolviendo en la API, pero la interfaz ya trabaja con los catálogos.
+
+Aplica la mejora sobre una base ya creada con:
+
+```bash
+docker compose exec -T db psql -v ON_ERROR_STOP=1 -U alquiler_app -d alquiler_db < sql/04_mejoras_perfil_convivencia.sql
+```
+
+En un volumen nuevo se ejecuta automáticamente después de `01_esquema_alquiler.sql`.
+
+La compatibilidad entre perfiles se calcula en `backend/dominio/compatibilidad.py`: 50 puntos por presupuestos solapados, hasta 20 por hábitos en común, hasta 20 por preferencias en común y 5 por cada campo tipado coincidente (máximo 100).
 
 ## 5. Endpoints principales (Swagger: /docs)
 
@@ -186,8 +212,9 @@ Con esto se refuerzan SRP y DIP en el backend. Quedan decisiones no SOLID hereda
 | `POST /api/alojamientos/{id}/imagenes` | Arrendador dueño | Implementado; la primera imagen es la portada del catálogo |
 | `GET /api/alojamientos/{id}/imagenes` | Público para activos | Implementado; galería del detalle |
 | `GET /api/alojamientos/{id}/contacto` | Buscador | Nombre y teléfono del arrendador para contacto por WhatsApp; el catálogo sigue siendo público |
-| `GET/PUT /api/companeros/mi-perfil` | Buscador | Implementado |
-| `GET /api/companeros/coincidencias` | Buscador | Coincidencia por presupuestos solapados con nombre y teléfono para WhatsApp |
+| `GET/PUT /api/companeros/mi-perfil` | Buscador | Perfil con catálogos de hábitos/preferencias y campos tipados |
+| `GET /api/companeros/catalogos` | Público | Catálogos y opciones para construir el perfil |
+| `GET /api/companeros/coincidencias` | Buscador | Coincidencia por presupuestos solapados, ordenada por compatibilidad, con nombre y teléfono para WhatsApp |
 | `POST /api/verificaciones/solicitar` | Autenticado | Implementado, documentos privados |
 | `GET /api/verificaciones/mi-estado` | Solicitante | Implementado |
 | `GET /api/administracion/usuarios` | Administrador | Listado de hasta 100 |
@@ -215,7 +242,7 @@ Con esto se refuerzan SRP y DIP en el backend. Quedan decisiones no SOLID hereda
 
 El documento del curso plantea **30 RF / 30 RNF**, pero este repositorio es una **base para implementarlos progresivamente**:
 
-- **Implementado en la base:** registros, ingreso, roles en API, consulta y edición limitada del perfil, foto de perfil con carga y retiro, historial, CRUD inicial de inmuebles (retiro lógico), consulta pública, paginación, subida de imágenes con portada y galería, detalle público, contacto autenticado con el arrendador por WhatsApp, único perfil de convivencia con resumen editable, coincidencias con datos de contacto, solicitud/revisión de identidad y gestión inicial de cuentas.
+- **Implementado en la base:** registros, ingreso, roles en API, consulta y edición limitada del perfil, foto de perfil con carga y retiro, historial, CRUD inicial de inmuebles (retiro lógico), consulta pública, paginación, subida de imágenes con portada y galería, detalle público, contacto autenticado con el arrendador por WhatsApp, único perfil de convivencia con resumen editable y catálogos tipados, coincidencias ordenadas por compatibilidad con datos de contacto, solicitud/revisión de identidad y gestión inicial de cuentas.
 - **Parcialmente implementado:** cierre de sesión (borra el token del navegador, pero el JWT emitido sigue siendo válido hasta expirar), filtros de precio (solo máximo), selección de comodidades en el frontend, coincidencia basada únicamente en presupuesto, destacados (ordenamiento sin panel para asignarlos), paneles con métricas y filtros administrativos.
 - **Pendiente:** eliminación formal de cuenta conforme a política de conservación, revocación de tokens, paginación completa de todas las listas, funcionalidades avanzadas de coincidencias, historial/auditoría de cambios, migraciones Alembic, suite completa de pruebas, gestión de imágenes (orden/retiro), respaldo/recuperación automatizada y cumplimiento verificado de RNF-08/09, RNF-15, RNF-19/20.
 
@@ -261,7 +288,8 @@ docker compose ps
 
 - Completar diagramas, DTOs, contratos y cobertura total de RF/RNF.
 - Añadir Alembic, pruebas de integración, pruebas de carga, control de errores consistente, monitoreo y métricas.
-- Refinar matching de compañeros con hábitos y preferencias e introducir filtros de precio mínimo.
+- Refinar el matching con filtros por distrito, edad y género preferido, y migrar los textos heredados a los catálogos.
+- Modelar UBIGEO (departamento/provincia/distrito) y catálogos administrables de estados y tipos.
 - Implementar solicitud de eliminación de cuenta y política de retención.
 - Crear despliegue de producción (Vite `build`, servidor estático y proxy HTTPS, procesos backend, respaldos restaurables).
 
