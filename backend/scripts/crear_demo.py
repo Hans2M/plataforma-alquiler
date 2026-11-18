@@ -23,7 +23,10 @@ from sqlalchemy import select
 from configuracion.base_datos import SessionLocal
 from configuracion.configuracion import settings
 from modelos.alojamiento import Alojamiento, ImagenAlojamiento
+from modelos.alojamiento import Alojamiento, ImagenAlojamiento
+from modelos.catalogos import TipoAlojamiento
 from modelos.perfil_companero import CatalogoHabito, CatalogoPreferencia, PerfilCompanero
+from modelos.ubigeo import Distrito
 from modelos.usuario import Usuario
 from repositorios.usuarios import RepositorioUsuariosSQLAlchemy
 from seguridad.autenticacion import hash_clave
@@ -62,6 +65,7 @@ BUSCADORES = [
             "genero": "femenino",
             "genero_preferido": "indiferente",
             "edad": 28,
+            "distrito_codigo": "100601",
         },
     },
     {
@@ -86,6 +90,7 @@ BUSCADORES = [
             "genero": "masculino",
             "genero_preferido": "indiferente",
             "edad": 22,
+            "distrito_codigo": "100601",
         },
     },
     {
@@ -110,6 +115,7 @@ BUSCADORES = [
             "genero": "femenino",
             "genero_preferido": "femenino",
             "edad": 26,
+            "distrito_codigo": "100601",
         },
     },
 ]
@@ -124,6 +130,7 @@ PUBLICACIONES = [
         "precio": Decimal("480.00"),
         "direccion": "Jr. Huánuco 245",
         "distrito": "Tingo María",
+        "distrito_codigo": "100601",
         "tipo": "habitacion",
         "colores": ((255, 214, 170), (120, 176, 214)),
     },
@@ -136,6 +143,7 @@ PUBLICACIONES = [
         "precio": Decimal("650.00"),
         "direccion": "Av. Universitaria 120",
         "distrito": "Tingo María",
+        "distrito_codigo": "100601",
         "tipo": "departamento",
         "colores": ((180, 220, 200), (90, 140, 190)),
     },
@@ -148,6 +156,7 @@ PUBLICACIONES = [
         "precio": Decimal("720.00"),
         "direccion": "Prolongación Raymondi 330",
         "distrito": "Tingo María",
+        "distrito_codigo": "100601",
         "tipo": "departamento",
         "colores": ((235, 205, 220), (110, 160, 170)),
     },
@@ -329,10 +338,19 @@ def _crear_usuario(db, repo, datos, rol, ruc=None, estado="verificada"):
     return usuario
 
 
+def _distrito_demo(db, codigo: str | None):
+    if not codigo:
+        return None
+    return db.scalar(select(Distrito).where(Distrito.codigo == codigo))
+
+
 def _crear_perfil(db, usuario, datos):
     datos = dict(datos)
     habitos_nombres = datos.pop("habitos_nombres", ())
     preferencias_nombres = datos.pop("preferencias_nombres", ())
+    distrito = _distrito_demo(db, datos.pop("distrito_codigo", None))
+    if distrito is not None:
+        datos["distrito_id"] = distrito.distrito_id
 
     perfil = db.scalar(
         select(PerfilCompanero).where(PerfilCompanero.buscador_id == usuario.usuario_id)
@@ -416,10 +434,24 @@ def _crear_publicacion(db, arrendador, datos):
         )
     )
     if publicacion is not None:
+        if publicacion.distrito_id is None:
+            distrito = _distrito_demo(db, datos.get("distrito_codigo"))
+            publicacion.distrito_id = distrito.distrito_id if distrito else None
+        if publicacion.tipo_id is None:
+            tipo = db.scalar(
+                select(TipoAlojamiento).where(
+                    TipoAlojamiento.codigo == datos["tipo"]
+                )
+            )
+            publicacion.tipo_id = tipo.tipo_id if tipo else None
         _sincronizar_fotos(db, publicacion, datos)
         print(f"Publicación ya existente, fotos actualizadas: {datos['titulo']}")
         return publicacion
 
+    distrito = _distrito_demo(db, datos.get("distrito_codigo"))
+    tipo = db.scalar(
+        select(TipoAlojamiento).where(TipoAlojamiento.codigo == datos["tipo"])
+    )
     publicacion = Alojamiento(
         arrendador_id=arrendador.usuario_id,
         titulo=datos["titulo"],
@@ -427,7 +459,9 @@ def _crear_publicacion(db, arrendador, datos):
         precio=datos["precio"],
         direccion=datos["direccion"],
         distrito=datos["distrito"],
+        distrito_id=distrito.distrito_id if distrito else None,
         tipo=datos["tipo"],
+        tipo_id=tipo.tipo_id if tipo else None,
         estado="activo",
         destacado=False,
     )

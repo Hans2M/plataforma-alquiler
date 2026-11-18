@@ -3,25 +3,22 @@ import { Link } from 'react-router-dom';
 import Tarjeta from '../../componentes/alojamientos/Tarjeta.jsx';
 import Mensaje from '../../componentes/comunes/Mensaje.jsx';
 import IconoPanel from '../../componentes/comunes/IconosPanel.jsx';
+import SelectorUbigeo from '../../componentes/ubigeo/SelectorUbigeo.jsx';
 import { get } from '../../servicios/api.js';
+import { useCatalogosAlojamiento } from '../../servicios/catalogos.js';
 
 const VACIO = {
   texto: '',
   distrito: '',
+  departamento_id: '',
+  provincia_id: '',
+  distrito_id: '',
   tipo: '',
   precio_min: '',
   precio_max: '',
   dias: '',
   orden: 'recientes',
 };
-
-const TIPOS = [
-  ['', 'Todos los tipos'],
-  ['habitacion', 'Habitación'],
-  ['departamento', 'Departamento'],
-  ['casa', 'Casa'],
-  ['compartido', 'Compartido'],
-];
 
 const FECHAS = [
   ['', 'Cualquier fecha'],
@@ -52,6 +49,7 @@ export default function Inicio({ usuario }) {
   const [error, setError] = useState('');
   const [cargando, setCargando] = useState(false);
   const [filtrosAbiertos, setFiltrosAbiertos] = useState(false);
+  const catalogos = useCatalogosAlojamiento();
 
   async function buscar(evento, filtros = f) {
     evento?.preventDefault();
@@ -92,17 +90,29 @@ export default function Inicio({ usuario }) {
     buscar(null, VACIO);
   }
 
-  const hayFiltros = f.texto !== '' || f.distrito !== '' || f.tipo !== ''
-    || f.precio_min !== '' || f.precio_max !== '' || f.dias !== ''
+  const hayFiltros = f.texto !== '' || f.distrito !== ''
+    || f.departamento_id !== '' || f.provincia_id !== '' || f.distrito_id !== ''
+    || f.tipo !== '' || f.precio_min !== '' || f.precio_max !== '' || f.dias !== ''
     || f.orden !== 'recientes';
 
   const filtrosActivos = [
     f.tipo,
+    f.departamento_id,
+    f.provincia_id,
+    f.distrito_id,
     f.precio_min,
     f.precio_max,
     f.dias,
     f.orden === 'recientes' ? '' : f.orden,
   ].filter(Boolean).length;
+
+  function cambiarUbigeo(ubicacion) {
+    aplicar({
+      departamento_id: ubicacion.departamentoId,
+      provincia_id: ubicacion.provinciaId,
+      distrito_id: ubicacion.distritoId,
+    });
+  }
 
   return <>
     <section className="hero"><div className="contenedor">
@@ -131,9 +141,9 @@ export default function Inicio({ usuario }) {
           </label>
 
           <label className="campoBuscador">
-            <span>Distrito</span>
+            <span>Distrito o ciudad</span>
             <input
-              aria-label="Distrito"
+              aria-label="Distrito o ciudad"
               placeholder="Ej. Tingo María"
               value={f.distrito}
               onChange={e => cambiar('distrito', e.target.value)}
@@ -147,8 +157,9 @@ export default function Inicio({ usuario }) {
               value={f.tipo}
               onChange={e => aplicar({ tipo: e.target.value })}
             >
-              {TIPOS.map(([valor, etiqueta]) => (
-                <option key={valor || 'todos'} value={valor}>{etiqueta}</option>
+              <option value="">Todos los tipos</option>
+              {catalogos.tipos.map((tipo) => (
+                <option key={tipo.tipo_id} value={tipo.codigo}>{tipo.nombre}</option>
               ))}
             </select>
           </label>
@@ -210,6 +221,18 @@ export default function Inicio({ usuario }) {
         </div>
 
         <div className="buscadorFiltros" id="filtrosBuscador">
+          <div className="filtroUbigeo">
+            <span className="buscadorEtiqueta">Ubicación exacta (UBIGEO)</span>
+            <SelectorUbigeo
+              variante="buscador"
+              departamentos={catalogos.departamentos}
+              departamentoId={f.departamento_id}
+              provinciaId={f.provincia_id}
+              distritoId={f.distrito_id}
+              onCambio={cambiarUbigeo}
+            />
+          </div>
+
           <div className="chipsFecha" role="group" aria-label="Fecha de publicación">
             <span className="buscadorEtiqueta">Publicado</span>
             {FECHAS.map(([valor, etiqueta]) => <button

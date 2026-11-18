@@ -234,3 +234,56 @@ def test_busqueda_por_fecha_de_publicacion_reciente(entorno):
     resultados = servicio.buscar(None, None, None, None, 1, 12, dias=7)
 
     assert [a.titulo for a in resultados] == ["Reciente"]
+
+
+def test_crear_con_ubigeo_y_tipo_deriva_el_texto_historico(entorno):
+    servicio, _ = entorno
+
+    alojamiento = servicio.crear(
+        5,
+        AlojamientoEntrada(
+            titulo="Departamento en Rupa-Rupa",
+            descripcion="Cerca al centro de Tingo María",
+            precio=Decimal("700.00"),
+            direccion="Jr. Ejemplo 456",
+            distrito_id=1,
+            tipo_id=2,
+            comodidad_ids=[],
+        ),
+    )
+
+    assert alojamiento.distrito_id == 1
+    assert alojamiento.distrito == "Rupa-Rupa"
+    assert alojamiento.tipo_id == 2
+    assert alojamiento.tipo == "departamento"
+
+
+def test_crear_rechaza_distrito_o_tipo_inexistente(entorno):
+    servicio, _ = entorno
+
+    with pytest.raises(ValidacionInvalida, match="distrito"):
+        servicio.crear(5, entrada(distrito_id=999))
+
+    with pytest.raises(ValidacionInvalida, match="tipo"):
+        servicio.crear(5, entrada(tipo_id=999))
+
+    # El tipo 3 existe pero está inactivo en el catálogo.
+    with pytest.raises(ValidacionInvalida, match="inactivo"):
+        servicio.crear(5, entrada(tipo_id=3))
+
+
+def test_busqueda_filtra_por_ubigeo(entorno):
+    servicio, _ = entorno
+    servicio.crear(5, entrada(titulo="En Huánuco", distrito_id=2))
+    servicio.crear(5, entrada(titulo="En Lima", distrito_id=3))
+    servicio.crear(5, entrada(titulo="Sin ubigeo"))
+
+    por_departamento = servicio.buscar(
+        None, None, None, None, 1, 12, departamento_id=2
+    )
+    por_provincia = servicio.buscar(None, None, None, None, 1, 12, provincia_id=1)
+    por_distrito = servicio.buscar(None, None, None, None, 1, 12, distrito_id=3)
+
+    assert [a.titulo for a in por_departamento] == ["En Lima"]
+    assert [a.titulo for a in por_provincia] == ["En Huánuco"]
+    assert [a.titulo for a in por_distrito] == ["En Lima"]

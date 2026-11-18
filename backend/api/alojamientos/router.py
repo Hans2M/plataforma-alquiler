@@ -28,6 +28,9 @@ def buscar(
     orden: Literal['recientes', 'precio_asc', 'precio_desc'] = 'recientes',
     pagina: int = Query(1, ge=1),
     limite: int = Query(12, ge=1, le=50),
+    distrito_id: int | None = Query(None, gt=0),
+    provincia_id: int | None = Query(None, gt=0),
+    departamento_id: int | None = Query(None, gt=0),
     servicio: ServicioAlojamientos = Depends(servicio_alojamientos),
 ):
     return servicio.buscar(
@@ -40,6 +43,9 @@ def buscar(
         precio_min,
         dias,
         orden,
+        distrito_id,
+        provincia_id,
+        departamento_id,
     )
 
 @router.get('/comodidades')

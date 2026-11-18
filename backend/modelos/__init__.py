@@ -1,4 +1,6 @@
 from .usuario import Usuario, Buscador, Arrendador
+from .catalogos import CatalogoEstado, TipoAlojamiento
+from .ubigeo import Departamento, Distrito, Provincia
 from .alojamiento import Alojamiento, Comodidad, AlojamientoComodidad, ImagenAlojamiento
 from .perfil_companero import (
     CatalogoHabito,

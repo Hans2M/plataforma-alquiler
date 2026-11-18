@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import IconoWhatsApp from '../../componentes/comunes/IconoWhatsApp.jsx';
 import Mensaje from '../../componentes/comunes/Mensaje.jsx';
+import SelectorUbigeo from '../../componentes/ubigeo/SelectorUbigeo.jsx';
 import { get, put } from '../../servicios/api.js';
+import { useCatalogosAlojamiento } from '../../servicios/catalogos.js';
 import { enlaceWhatsApp, mensajeCompanero } from '../../servicios/whatsapp.js';
 
 const OPCIONES_VACIAS = {
@@ -9,6 +11,14 @@ const OPCIONES_VACIAS = {
   ocupaciones: [],
   generos: [],
   generos_preferidos: [],
+};
+
+const FILTROS_VACIOS = {
+  edad_min: '',
+  edad_max: '',
+  genero: '',
+  genero_preferido: '',
+  mismo_distrito: false,
 };
 
 const vacio = {
@@ -24,6 +34,9 @@ const vacio = {
   genero: '',
   genero_preferido: '',
   edad: '',
+  departamento_id: '',
+  provincia_id: '',
+  distrito_id: '',
   descripcion: '',
   estado: 'activo',
 };
@@ -43,6 +56,9 @@ function aFormulario(perfil) {
     genero: perfil.genero ?? '',
     genero_preferido: perfil.genero_preferido ?? '',
     edad: perfil.edad == null ? '' : String(perfil.edad),
+    departamento_id: '',
+    provincia_id: '',
+    distrito_id: perfil.distrito_id ?? '',
     descripcion: perfil.descripcion ?? '',
     estado: perfil.estado ?? 'activo',
   };
@@ -62,9 +78,21 @@ function aCuerpo(f) {
     genero: f.genero || null,
     genero_preferido: f.genero_preferido || null,
     edad: f.edad === '' ? null : Number(f.edad),
+    distrito_id: f.distrito_id === '' ? null : Number(f.distrito_id),
     descripcion: f.descripcion.trim() || null,
     estado: f.estado,
   };
+}
+
+function consultaCoincidencias(filtros) {
+  const params = new URLSearchParams();
+  if (filtros.edad_min !== '') params.set('edad_min', filtros.edad_min);
+  if (filtros.edad_max !== '') params.set('edad_max', filtros.edad_max);
+  if (filtros.genero) params.set('genero', filtros.genero);
+  if (filtros.genero_preferido) params.set('genero_preferido', filtros.genero_preferido);
+  if (filtros.mismo_distrito) params.set('mismo_distrito', 'true');
+  const texto = params.toString();
+  return texto ? `?${texto}` : '';
 }
 
 function etiquetaOpcion(lista, valor) {
@@ -86,6 +114,7 @@ function resumenTipado(persona, opciones) {
   if (persona.genero_preferido) {
     partes.push(`Convive con: ${etiquetaOpcion(opciones.generos_preferidos, persona.genero_preferido)}`);
   }
+  if (persona.distrito_completo) partes.push(persona.distrito_completo);
   return partes.join(' · ');
 }
 
@@ -133,6 +162,8 @@ export default function Companeros() {
   const [mensaje, setMensaje] = useState('');
   const [catalogos, setCatalogos] = useState({ habitos: [], preferencias: [] });
   const [opciones, setOpciones] = useState(OPCIONES_VACIAS);
+  const [filtros, setFiltros] = useState(FILTROS_VACIOS);
+  const ubigeo = useCatalogosAlojamiento();
 
   useEffect(() => {
     let vigente = true;
@@ -174,14 +205,8 @@ export default function Companeros() {
       setCoincidencias([]);
       return undefined;
     }
-    let vigente = true;
-    setBuscando(true);
-    setError('');
-    get('/companeros/coincidencias')
-      .then((lista) => vigente && setCoincidencias(lista))
-      .catch((e) => vigente && setError(e.message))
-      .finally(() => vigente && setBuscando(false));
-    return () => { vigente = false; };
+    buscarCoincidencias(FILTROS_VACIOS);
+    return undefined;
   }, [perfil]);
 
   function alternarCatalogo(campo, identificador) {
@@ -211,6 +236,7 @@ export default function Companeros() {
       const guardado = await put('/companeros/mi-perfil', cuerpo);
       setPerfil(guardado);
       setF(aFormulario(guardado));
+      setFiltros(FILTROS_VACIOS);
       setEditando(false);
       setMensaje(perfil ? 'Perfil actualizado correctamente.' : 'Perfil creado correctamente.');
     } catch (err) {
@@ -232,16 +258,33 @@ export default function Companeros() {
     setEditando(false);
   }
 
-  async function buscarCoincidencias() {
+  async function buscarCoincidencias(criterios = filtros) {
     setError('');
     setBuscando(true);
     try {
-      setCoincidencias(await get('/companeros/coincidencias'));
+      setCoincidencias(await get('/companeros/coincidencias' + consultaCoincidencias(criterios)));
     } catch (err) {
       setError(err.message);
     } finally {
       setBuscando(false);
     }
+  }
+
+  function aplicarFiltros(evento) {
+    evento.preventDefault();
+    if (
+      filtros.edad_min !== ''
+      && filtros.edad_max !== ''
+      && Number(filtros.edad_min) > Number(filtros.edad_max)
+    ) {
+      return setError('La edad mínima no puede superar a la edad máxima.');
+    }
+    buscarCoincidencias(filtros);
+  }
+
+  function limpiarFiltros() {
+    setFiltros(FILTROS_VACIOS);
+    buscarCoincidencias(FILTROS_VACIOS);
   }
 
   if (cargando) {
@@ -380,6 +423,19 @@ export default function Companeros() {
                     {opciones.generos_preferidos.map((o) => <option key={o.valor} value={o.valor}>{o.etiqueta}</option>)}
                   </select>
                 </label>
+                <SelectorUbigeo
+                  departamentos={ubigeo.departamentos}
+                  departamentoId={f.departamento_id}
+                  provinciaId={f.provincia_id}
+                  distritoId={f.distrito_id}
+                  etiqueta="Distrito de referencia"
+                  onCambio={(ubicacion) => setF((actual) => ({
+                    ...actual,
+                    departamento_id: ubicacion.departamentoId,
+                    provincia_id: ubicacion.provinciaId,
+                    distrito_id: ubicacion.distritoId,
+                  }))}
+                />
               </div>
 
               <fieldset className="grupoPerfil">
@@ -454,6 +510,67 @@ export default function Companeros() {
             </span>
           </div>
 
+          <form className="filtrosCoincidencias" onSubmit={aplicarFiltros}>
+            <label>Edad mínima
+              <input
+                type="number"
+                inputMode="numeric"
+                min="18"
+                max="99"
+                placeholder="18"
+                value={filtros.edad_min}
+                onChange={(e) => setFiltros({ ...filtros, edad_min: e.target.value })}
+              />
+            </label>
+            <label>Edad máxima
+              <input
+                type="number"
+                inputMode="numeric"
+                min="18"
+                max="99"
+                placeholder="99"
+                value={filtros.edad_max}
+                onChange={(e) => setFiltros({ ...filtros, edad_max: e.target.value })}
+              />
+            </label>
+            <label>Género
+              <select
+                value={filtros.genero}
+                onChange={(e) => setFiltros({ ...filtros, genero: e.target.value })}
+              >
+                <option value="">Cualquier género</option>
+                {opciones.generos.map((o) => <option key={o.valor} value={o.valor}>{o.etiqueta}</option>)}
+              </select>
+            </label>
+            <label>Busca convivir con
+              <select
+                value={filtros.genero_preferido}
+                onChange={(e) => setFiltros({ ...filtros, genero_preferido: e.target.value })}
+              >
+                <option value="">Cualquier preferencia</option>
+                {opciones.generos_preferidos.map((o) => <option key={o.valor} value={o.valor}>{o.etiqueta}</option>)}
+              </select>
+            </label>
+            <label
+              className="casillaFiltro"
+              title={perfil.distrito_id ? undefined : 'Agrega tu distrito al perfil para usar este filtro.'}
+            >
+              <input
+                type="checkbox"
+                disabled={!perfil.distrito_id}
+                checked={filtros.mismo_distrito}
+                onChange={(e) => setFiltros({ ...filtros, mismo_distrito: e.target.checked })}
+              />
+              Solo mi distrito
+            </label>
+            <div className="acciones">
+              <button className="btn secundario" type="submit" disabled={buscando}>
+                {buscando ? 'Buscando…' : 'Aplicar filtros'}
+              </button>
+              <button className="btn texto" type="button" onClick={limpiarFiltros}>Limpiar filtros</button>
+            </div>
+          </form>
+
           {buscando && <p>Buscando perfiles compatibles…</p>}
           {!buscando && coincidencias.length === 0
             ? <div className="vacio">
@@ -471,7 +588,10 @@ export default function Companeros() {
                     <AvatarPersona persona={c} />
                     <div>
                       <h3>{c.nombre_completo}</h3>
-                      <p className="textoPequeno">{montos(c.presupuesto_min)} — {montos(c.presupuesto_max)}</p>
+                      <p className="textoPequeno">
+                        {montos(c.presupuesto_min)} — {montos(c.presupuesto_max)}
+                        {c.distrito_completo ? ` · ${c.distrito_completo}` : ''}
+                      </p>
                     </div>
                     <span className="nivelCompatibilidad" title="Afinidad por presupuesto, hábitos y preferencias">
                       {c.compatibilidad}% compatible

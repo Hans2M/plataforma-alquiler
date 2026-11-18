@@ -7,6 +7,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Identity,
+    Integer,
     Numeric,
     SmallInteger,
     String,
@@ -16,6 +17,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from configuracion.base_datos import Base
+from modelos.ubigeo import Distrito
 
 
 class CatalogoHabito(Base):
@@ -121,12 +123,17 @@ class PerfilCompanero(Base):
     genero: Mapped[str | None] = mapped_column(String(20))
     genero_preferido: Mapped[str | None] = mapped_column(String(20))
     edad: Mapped[int | None] = mapped_column(SmallInteger)
+    distrito_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("alquiler.ubigeo_distritos.distrito_id")
+    )
     actualizado_en: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
         onupdate=func.now(),
     )
+
+    distrito_ref: Mapped[Distrito | None] = relationship(lazy="joined")
 
     habitos_catalogo: Mapped[list["CatalogoHabito"]] = relationship(
         secondary=PerfilHabito.__table__,
@@ -162,3 +169,7 @@ class PerfilCompanero(Base):
     @property
     def preferencia_nombres(self) -> list[str]:
         return [preferencia.nombre for preferencia in self._preferencias_ordenadas]
+
+    @property
+    def distrito_completo(self) -> str | None:
+        return self.distrito_ref.distrito_completo if self.distrito_ref else None

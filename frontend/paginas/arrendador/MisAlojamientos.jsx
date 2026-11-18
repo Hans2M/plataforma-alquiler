@@ -1,14 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import { get, post, patch, del, subir } from '../../servicios/api.js';
 import Mensaje from '../../componentes/comunes/Mensaje.jsx';
+import SelectorUbigeo from '../../componentes/ubigeo/SelectorUbigeo.jsx';
+import { useCatalogosAlojamiento } from '../../servicios/catalogos.js';
 
 const inicial = {
   titulo: '',
   descripcion: '',
   precio: '',
   direccion: '',
-  distrito: '',
-  tipo: 'habitacion',
+  departamento_id: '',
+  provincia_id: '',
+  distrito_id: '',
+  tipo_id: '',
   estado: 'activo',
 };
 
@@ -20,6 +24,7 @@ export default function MisAlojamientos() {
   const [foto, setFoto] = useState(null);
   const [vistaPrevia, setVistaPrevia] = useState('');
   const [enviando, setEnviando] = useState(false);
+  const catalogos = useCatalogosAlojamiento();
 
   async function cargar() {
     try {
@@ -50,11 +55,18 @@ export default function MisAlojamientos() {
     e.preventDefault();
     setError('');
     setMensaje('');
+    if (!f.distrito_id) return setError('Selecciona el departamento, la provincia y el distrito.');
+    if (!f.tipo_id) return setError('Selecciona el tipo de alojamiento.');
     setEnviando(true);
     try {
       const item = await post('/alojamientos', {
-        ...f,
+        titulo: f.titulo,
+        descripcion: f.descripcion,
         precio: Number(f.precio),
+        direccion: f.direccion,
+        distrito_id: Number(f.distrito_id),
+        tipo_id: Number(f.tipo_id),
+        estado: f.estado,
         comodidad_ids: [],
       });
       if (foto) await subir(`/alojamientos/${item.alojamiento_id}/imagenes`, foto);
@@ -105,7 +117,6 @@ export default function MisAlojamientos() {
             descripcion: 'Descripción',
             precio: 'Precio S/',
             direccion: 'Dirección',
-            distrito: 'Distrito',
           }).map(([clave, etiqueta]) => <label key={clave}>{etiqueta}
             <input
               required
@@ -116,14 +127,37 @@ export default function MisAlojamientos() {
               onChange={e => setF({ ...f, [clave]: e.target.value })}
             />
           </label>)}
-          <label>Tipo
-            <select value={f.tipo} onChange={e => setF({ ...f, tipo: e.target.value })}>
-              <option value="habitacion">Habitación</option>
-              <option value="departamento">Departamento</option>
-              <option value="casa">Casa</option>
-              <option value="compartido">Compartido</option>
+
+          <SelectorUbigeo
+            departamentos={catalogos.departamentos}
+            departamentoId={f.departamento_id}
+            provinciaId={f.provincia_id}
+            distritoId={f.distrito_id}
+            requerido
+            onCambio={(ubicacion) => setF((actual) => ({
+              ...actual,
+              departamento_id: ubicacion.departamentoId,
+              provincia_id: ubicacion.provinciaId,
+              distrito_id: ubicacion.distritoId,
+            }))}
+          />
+
+          <label>Tipo de alojamiento
+            <select
+              required
+              value={f.tipo_id}
+              onChange={e => setF({ ...f, tipo_id: e.target.value })}
+            >
+              <option value="">Selecciona un tipo</option>
+              {catalogos.tipos.map((tipo) => (
+                <option key={tipo.tipo_id} value={tipo.tipo_id}>{tipo.nombre}</option>
+              ))}
             </select>
           </label>
+          <p className="ayudaCampo">
+            Los tipos disponibles los administra la plataforma y pueden cambiar con el tiempo.
+          </p>
+
           <label>Foto de la habitación (opcional)
             <input type="file" accept="image/jpeg,image/png,image/webp" onChange={e => elegirFoto(e.target.files?.[0] || null)} />
             <span className="ayudaCampo">JPG, PNG o WebP, hasta 5 MB. Se mostrará en el catálogo.</span>
@@ -146,7 +180,7 @@ export default function MisAlojamientos() {
               </div>
               <div className="publicacionDatos">
                 <h3>{item.titulo}</h3>
-                <p>{item.distrito} · S/ {Number(item.precio).toFixed(2)} · {item.estado}</p>
+                <p>{item.distrito_completo || item.distrito} · {item.tipo_nombre || item.tipo} · S/ {Number(item.precio).toFixed(2)} · {item.estado}</p>
                 <div className="acciones">
                   <button onClick={() => cambiarEstado(item)} className="btn secundario" type="button">
                     {item.estado === 'activo' ? 'Desactivar' : 'Activar'}

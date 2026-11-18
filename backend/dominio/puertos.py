@@ -12,8 +12,14 @@ from typing import Protocol
 
 from dominio.consultas import CoincidenciaCompanero
 from modelos.alojamiento import Alojamiento, Comodidad, ImagenAlojamiento
-from modelos.perfil_companero import PerfilCompanero
+from modelos.catalogos import CatalogoEstado, TipoAlojamiento
+from modelos.perfil_companero import (
+    CatalogoHabito,
+    CatalogoPreferencia,
+    PerfilCompanero,
+)
 from modelos.registro_acceso import RegistroAcceso
+from modelos.ubigeo import Departamento, Distrito
 from modelos.usuario import Usuario
 from modelos.verificacion_identidad import VerificacionIdentidad
 
@@ -58,6 +64,9 @@ class RepositorioAlojamientos(Protocol):
         precio_min: float | None = None,
         dias: int | None = None,
         orden: str = "recientes",
+        distrito_id: int | None = None,
+        provincia_id: int | None = None,
+        departamento_id: int | None = None,
     ) -> list[Alojamiento]: ...
 
     def de_arrendador(self, uid: int) -> list[Alojamiento]: ...
@@ -80,12 +89,19 @@ class RepositorioAlojamientos(Protocol):
 
     def propietario_de(self, alojamiento_id: int) -> Usuario | None: ...
 
+    def distrito(self, distrito_id: int) -> Distrito | None: ...
+
+    def tipo(self, tipo_id: int) -> TipoAlojamiento | None: ...
+
 
 class RepositorioCompaneros(Protocol):
     def por_buscador(self, uid: int) -> PerfilCompanero | None: ...
 
     def coincidencias(
-        self, uid: int, perfil: PerfilCompanero
+        self,
+        uid: int,
+        perfil: PerfilCompanero,
+        filtros: dict | None = None,
     ) -> list[CoincidenciaCompanero]: ...
 
     def agregar(self, perfil: PerfilCompanero) -> None: ...
@@ -101,6 +117,48 @@ class RepositorioCompaneros(Protocol):
     def asignar_preferencias(
         self, perfil: PerfilCompanero, ids: list[int]
     ) -> None: ...
+
+    def distrito(self, distrito_id: int) -> Distrito | None: ...
+
+
+class RepositorioCatalogos(Protocol):
+    def tipos(self, incluir_inactivos: bool = False) -> list[TipoAlojamiento]: ...
+
+    def tipo(self, tipo_id: int) -> TipoAlojamiento | None: ...
+
+    def tipo_por_codigo(self, codigo: str) -> TipoAlojamiento | None: ...
+
+    def tipo_por_nombre(self, nombre: str) -> TipoAlojamiento | None: ...
+
+    def agregar_tipo(self, tipo: TipoAlojamiento) -> None: ...
+
+    def estados(
+        self, dominio: str | None = None, incluir_inactivos: bool = False
+    ) -> list[CatalogoEstado]: ...
+
+    def estado(self, dominio: str, codigo: str) -> CatalogoEstado | None: ...
+
+    def habitos(self, incluir_inactivos: bool = False) -> list[CatalogoHabito]: ...
+
+    def habito(self, habito_id: int) -> CatalogoHabito | None: ...
+
+    def habito_por_nombre(self, nombre: str) -> CatalogoHabito | None: ...
+
+    def agregar_habito(self, habito: CatalogoHabito) -> None: ...
+
+    def preferencias(
+        self, incluir_inactivos: bool = False
+    ) -> list[CatalogoPreferencia]: ...
+
+    def preferencia(self, preferencia_id: int) -> CatalogoPreferencia | None: ...
+
+    def preferencia_por_nombre(self, nombre: str) -> CatalogoPreferencia | None: ...
+
+    def agregar_preferencia(self, preferencia: CatalogoPreferencia) -> None: ...
+
+    def departamentos(self) -> list[Departamento]: ...
+
+    def distrito(self, distrito_id: int) -> Distrito | None: ...
 
 
 class RepositorioVerificaciones(Protocol):

@@ -4,6 +4,10 @@ from dominio.puertos import RepositorioCompaneros
 from esquemas.datos import PerfilEntrada
 from modelos.perfil_companero import CatalogoHabito, CatalogoPreferencia, PerfilCompanero
 
+# Valores aceptados por el perfil; la base los refuerza con CHECK.
+GENEROS = {"femenino", "masculino", "otro", "prefiero_no_decir"}
+GENEROS_PREFERIDOS = {"femenino", "masculino", "mixto", "indiferente"}
+
 
 class ServicioCompaneros:
     """Casos de uso del perfil de convivencia y sus coincidencias."""
@@ -19,6 +23,9 @@ class ServicioCompaneros:
 
     def guardar_perfil(self, uid: int, datos: PerfilEntrada) -> PerfilCompanero:
         valores = datos.model_dump(exclude={"habito_ids", "preferencia_ids"})
+        if valores.get("distrito_id") is not None:
+            if self.companeros.distrito(valores["distrito_id"]) is None:
+                raise SolicitudInvalida("El distrito indicado no existe")
         perfil = self.companeros.por_buscador(uid)
         if perfil is None:
             perfil = PerfilCompanero(buscador_id=uid, **valores)
@@ -43,11 +50,45 @@ class ServicioCompaneros:
 
         return perfil
 
-    def coincidencias(self, uid: int) -> list[CoincidenciaCompanero]:
+    def coincidencias(
+        self,
+        uid: int,
+        edad_min: int | None = None,
+        edad_max: int | None = None,
+        genero: str | None = None,
+        genero_preferido: str | None = None,
+        mismo_distrito: bool = False,
+    ) -> list[CoincidenciaCompanero]:
         perfil = self.companeros.por_buscador(uid)
         if perfil is None or perfil.estado != "activo":
             raise SolicitudInvalida("Debes tener un perfil activo")
-        return self.companeros.coincidencias(uid, perfil)
+
+        if (
+            edad_min is not None
+            and edad_max is not None
+            and edad_min > edad_max
+        ):
+            raise SolicitudInvalida(
+                "La edad mínima no puede superar a la edad máxima"
+            )
+        if genero is not None and genero not in GENEROS:
+            raise SolicitudInvalida("El género indicado no es válido")
+        if (
+            genero_preferido is not None
+            and genero_preferido not in GENEROS_PREFERIDOS
+        ):
+            raise SolicitudInvalida(
+                "La preferencia de género indicada no es válida"
+            )
+
+        filtros = {
+            "edad_min": edad_min,
+            "edad_max": edad_max,
+            "genero": genero,
+            "genero_preferido": genero_preferido,
+            "mismo_distrito": mismo_distrito,
+        }
+        return self.companeros.coincidencias(uid, perfil, filtros)
 
     def catalogos(self) -> tuple[list[CatalogoHabito], list[CatalogoPreferencia]]:
         return self.companeros.catalogos()

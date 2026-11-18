@@ -8,6 +8,7 @@ from modelos.perfil_companero import (
     CatalogoPreferencia,
     PerfilCompanero,
 )
+from modelos.ubigeo import Distrito
 from modelos.usuario import Usuario
 
 
@@ -23,8 +24,9 @@ class RepositorioCompanerosSQLAlchemy:
         )
 
     def coincidencias(
-        self, uid: int, perfil: PerfilCompanero
+        self, uid: int, perfil: PerfilCompanero, filtros: dict | None = None
     ) -> list[CoincidenciaCompanero]:
+        filtros = filtros or {}
         stmt = (
             select(PerfilCompanero, Usuario)
             .join(Usuario, Usuario.usuario_id == PerfilCompanero.buscador_id)
@@ -34,8 +36,20 @@ class RepositorioCompanerosSQLAlchemy:
                 PerfilCompanero.presupuesto_min <= perfil.presupuesto_max,
                 PerfilCompanero.presupuesto_max >= perfil.presupuesto_min,
             )
-            .limit(50)
         )
+        if filtros.get("edad_min") is not None:
+            stmt = stmt.where(PerfilCompanero.edad >= filtros["edad_min"])
+        if filtros.get("edad_max") is not None:
+            stmt = stmt.where(PerfilCompanero.edad <= filtros["edad_max"])
+        if filtros.get("genero"):
+            stmt = stmt.where(PerfilCompanero.genero == filtros["genero"])
+        if filtros.get("genero_preferido"):
+            stmt = stmt.where(
+                PerfilCompanero.genero_preferido == filtros["genero_preferido"]
+            )
+        if filtros.get("mismo_distrito") and perfil.distrito_id is not None:
+            stmt = stmt.where(PerfilCompanero.distrito_id == perfil.distrito_id)
+        stmt = stmt.order_by(PerfilCompanero.perfil_id).limit(50)
         resultados = [
             self._a_coincidencia(perfil, otro, usuario)
             for otro, usuario in self.db.execute(stmt)
@@ -71,6 +85,8 @@ class RepositorioCompanerosSQLAlchemy:
             genero=otro.genero,
             genero_preferido=otro.genero_preferido,
             edad=otro.edad,
+            distrito_id=otro.distrito_id,
+            distrito_completo=otro.distrito_completo,
             compatibilidad=calcular_compatibilidad(
                 habito_ids_a=perfil.habito_ids,
                 habito_ids_b=otro.habito_ids,
@@ -155,3 +171,6 @@ class RepositorioCompanerosSQLAlchemy:
                 )
             )
         )
+
+    def distrito(self, distrito_id: int) -> Distrito | None:
+        return self.db.get(Distrito, distrito_id)

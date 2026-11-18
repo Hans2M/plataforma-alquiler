@@ -22,6 +22,9 @@ class ServicioAlojamientos:
         precio_min: float | None = None,
         dias: int | None = None,
         orden: str = "recientes",
+        distrito_id: int | None = None,
+        provincia_id: int | None = None,
+        departamento_id: int | None = None,
     ) -> list[Alojamiento]:
         if (
             precio_min is not None
@@ -41,6 +44,9 @@ class ServicioAlojamientos:
             precio_min,
             dias,
             orden,
+            distrito_id,
+            provincia_id,
+            departamento_id,
         )
 
     def de_arrendador(self, uid: int) -> list[Alojamiento]:
@@ -91,16 +97,45 @@ class ServicioAlojamientos:
     def crear(self, uid: int, datos: AlojamientoEntrada) -> Alojamiento:
         if not self.alojamientos.comodidades_validas(datos.comodidad_ids):
             raise ValidacionInvalida("Una comodidad no existe")
+        valores = datos.model_dump(exclude={"comodidad_ids"})
+        self._normalizar_ubicacion(valores, parcial=False)
         nuevo = Alojamiento(
             arrendador_id=uid,
             destacado=False,
-            **datos.model_dump(exclude={"comodidad_ids"}),
+            **valores,
         )
         self.alojamientos.agregar(nuevo)
         self.alojamientos.asignar_comodidades(
             nuevo.alojamiento_id, datos.comodidad_ids
         )
         return nuevo
+
+    def _normalizar_ubicacion(self, valores: dict, parcial: bool) -> None:
+        """Traduce UBIGEO/tipo a ids y mantiene el texto histórico.
+
+        En creación exige ubicación y tipo (por id o por texto). En edición
+        parcial solo valida los campos presentes.
+        """
+        distrito_id = valores.get("distrito_id")
+        tipo_id = valores.get("tipo_id")
+
+        if distrito_id is not None:
+            distrito = self.alojamientos.distrito(distrito_id)
+            if distrito is None:
+                raise ValidacionInvalida("El distrito indicado no existe")
+            valores["distrito"] = distrito.nombre
+        elif not parcial and not valores.get("distrito"):
+            raise ValidacionInvalida("Indica el distrito del alojamiento")
+
+        if tipo_id is not None:
+            tipo = self.alojamientos.tipo(tipo_id)
+            if tipo is None or not tipo.activo:
+                raise ValidacionInvalida(
+                    "El tipo de alojamiento no existe o está inactivo"
+                )
+            valores["tipo"] = tipo.codigo
+        elif not parcial and not valores.get("tipo"):
+            raise ValidacionInvalida("Indica el tipo de alojamiento")
 
     def modificar(
         self, uid: int, alojamiento_id: int, datos: AlojamientoEditar
@@ -115,6 +150,7 @@ class ServicioAlojamientos:
         ids = cambios.pop("comodidad_ids", None)
         if ids is not None and not self.alojamientos.comodidades_validas(ids):
             raise ValidacionInvalida("Una comodidad no existe")
+        self._normalizar_ubicacion(cambios, parcial=True)
         for clave, valor in cambios.items():
             setattr(obj, clave, valor)
         if ids is not None:

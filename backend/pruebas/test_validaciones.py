@@ -168,3 +168,35 @@ def test_campos_tipados_de_perfil_se_validan():
         PerfilEntrada(presupuesto_min=300, presupuesto_max=600, edad=15)
     with pytest.raises(ValidationError):
         PerfilEntrada(presupuesto_min=300, presupuesto_max=600, horario='cualquiera')
+
+
+def test_alojamiento_exige_distrito_y_tipo():
+    with pytest.raises(ValidationError, match='distrito'):
+        AlojamientoEntrada(
+            titulo='Habitación',
+            descripcion='Habitación equipada',
+            precio=250,
+            direccion='Av. Ficticia 123',
+            tipo='habitacion',
+        )
+    with pytest.raises(ValidationError, match='tipo'):
+        AlojamientoEntrada(
+            titulo='Habitación',
+            descripcion='Habitación equipada',
+            precio=250,
+            direccion='Av. Ficticia 123',
+            distrito='Tingo María',
+        )
+
+
+def test_alojamiento_acepta_solo_ids_de_ubigeo_y_tipo():
+    datos = AlojamientoEntrada(
+        titulo='Habitación',
+        descripcion='Habitación equipada',
+        precio=250,
+        direccion='Av. Ficticia 123',
+        distrito_id=1,
+        tipo_id=1,
+    )
+    assert datos.distrito is None
+    assert datos.distrito_id == 1

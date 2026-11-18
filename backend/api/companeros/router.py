@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from api.dependencias import servicio_companeros
 from esquemas.datos import CatalogosSalida, CoincidenciaSalida, PerfilEntrada, PerfilSalida
@@ -67,5 +67,17 @@ def editar(
 def buscar(
     u: Usuario = Depends(rol_requerido('buscador')),
     servicio: ServicioCompaneros = Depends(servicio_companeros),
+    edad_min: int | None = Query(None, ge=18, le=99),
+    edad_max: int | None = Query(None, ge=18, le=99),
+    genero: str | None = Query(None, max_length=20),
+    genero_preferido: str | None = Query(None, max_length=20),
+    mismo_distrito: bool = False,
 ):
-    return servicio.coincidencias(u.usuario_id)
+    return servicio.coincidencias(
+        u.usuario_id,
+        edad_min=edad_min,
+        edad_max=edad_max,
+        genero=genero,
+        genero_preferido=genero_preferido,
+        mismo_distrito=mismo_distrito,
+    )

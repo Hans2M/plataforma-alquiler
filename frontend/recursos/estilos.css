@@ -2044,3 +2044,122 @@ html[data-tema="oscuro"] .nivelCompatibilidad {
 @media (max-width: 640px) {
   .camposPerfil { grid-template-columns: 1fr; }
 }
+
+/* ---------- UBIGEO, filtros de coincidencias y catálogos ---------- */
+.selectorUbigeo {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.65rem 0.85rem;
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.selectorUbigeo > label { min-width: 0; }
+.selectorUbigeo select { min-height: 42px; }
+
+.filtroUbigeo {
+  display: grid;
+  flex: 1 1 100%;
+  gap: 8px;
+}
+
+.selectorUbigeoBuscador .campoBuscador > span:first-child { font-size: 0.66rem; }
+
+.filtrosCoincidencias {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  align-items: end;
+  gap: 10px 12px;
+  margin: 4px 0 16px;
+  padding: 14px;
+  border: 1px solid var(--borde);
+  border-radius: 12px;
+  background: var(--superficie-3);
+}
+
+.filtrosCoincidencias label { font-size: 0.82rem; }
+.filtrosCoincidencias .acciones { grid-column: 1 / -1; margin: 0; }
+
+.casillaFiltro {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 46px;
+  font-weight: 600;
+}
+
+.casillaFiltro input {
+  width: auto;
+  min-height: 0;
+  accent-color: var(--azul);
+}
+
+.filtrosCoincidencias .casillaFiltro { align-self: end; }
+
+.catalogoSeccion { margin-bottom: 18px; }
+.catalogoSeccion h2 { margin-top: 0; }
+.catalogoGrupo { margin: 14px 0; }
+.catalogoGrupo h3 {
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+  text-transform: capitalize;
+}
+
+.catalogoFila {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  margin-bottom: 8px;
+  padding: 11px 12px;
+  border: 1px solid var(--borde);
+  border-radius: 10px;
+  background: var(--superficie-2);
+}
+
+.catalogoResumen {
+  display: grid;
+  flex: 1 1 240px;
+  gap: 2px;
+  min-width: 200px;
+}
+
+.catalogoResumen strong { color: var(--texto-fuerte); }
+.catalogoOrden { color: var(--texto-tenue); font-size: 0.78rem; white-space: nowrap; }
+.catalogoFila .chipEstado { margin-left: 0; }
+
+form.catalogoEdicion {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  align-items: end;
+  gap: 10px 12px;
+}
+
+form.catalogoEdicion label { font-size: 0.82rem; }
+form.catalogoEdicion .acciones { grid-column: 1 / -1; margin: 0; }
+
+form.catalogoNuevo {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  align-items: end;
+  gap: 10px 12px;
+  margin-top: 12px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--borde-fuerte);
+}
+
+form.catalogoNuevo h3 { grid-column: 1 / -1; margin: 0; font-size: 1rem; }
+form.catalogoNuevo label { font-size: 0.82rem; }
+form.catalogoNuevo .btn { justify-self: start; }
+
+@media (max-width: 720px) {
+  .selectorUbigeo,
+  .selectorUbigeoBuscador { grid-template-columns: 1fr; }
+  .filtrosCoincidencias { grid-template-columns: 1fr 1fr; }
+}
+
+@media (max-width: 480px) {
+  .filtrosCoincidencias { grid-template-columns: 1fr; }
+  .catalogoFila { align-items: stretch; flex-direction: column; }
+  .catalogoFila .btn { width: 100%; }
+}

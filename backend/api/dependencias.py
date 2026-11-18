@@ -12,11 +12,13 @@ from configuracion.base_datos import obtener_db
 from dominio.puertos import (
     RepositorioAccesos,
     RepositorioAlojamientos,
+    RepositorioCatalogos,
     RepositorioCompaneros,
     RepositorioUsuarios,
     RepositorioVerificaciones,
 )
 from repositorios.alojamientos import RepositorioAlojamientosSQLAlchemy
+from repositorios.catalogos import RepositorioCatalogosSQLAlchemy
 from repositorios.companeros import RepositorioCompanerosSQLAlchemy
 from repositorios.registros_acceso import RepositorioAccesosSQLAlchemy
 from repositorios.usuarios import RepositorioUsuariosSQLAlchemy
@@ -24,6 +26,7 @@ from repositorios.verificaciones import RepositorioVerificacionesSQLAlchemy
 from servicios.administracion import ServicioAdministracion
 from servicios.alojamientos import ServicioAlojamientos
 from servicios.autenticacion import ServicioAutenticacion
+from servicios.catalogos import ServicioCatalogos
 from servicios.companeros import ServicioCompaneros
 from servicios.usuarios import ServicioUsuarios
 from servicios.verificaciones import ServicioVerificaciones
@@ -53,6 +56,12 @@ def repositorio_verificaciones(
     db: Session = Depends(obtener_db, scope="function"),
 ) -> RepositorioVerificaciones:
     return RepositorioVerificacionesSQLAlchemy(db)
+
+
+def repositorio_catalogos(
+    db: Session = Depends(obtener_db, scope="function"),
+) -> RepositorioCatalogos:
+    return RepositorioCatalogosSQLAlchemy(db)
 
 
 def servicio_autenticacion(
@@ -92,3 +101,9 @@ def servicio_administracion(
     usuarios: RepositorioUsuarios = Depends(repositorio_usuarios),
 ) -> ServicioAdministracion:
     return ServicioAdministracion(usuarios)
+
+
+def servicio_catalogos(
+    catalogos: RepositorioCatalogos = Depends(repositorio_catalogos),
+) -> ServicioCatalogos:
+    return ServicioCatalogos(catalogos)

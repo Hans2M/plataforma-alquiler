@@ -177,3 +177,56 @@ def test_catalogos_disponibles_para_formulario(entorno):
         "Ambiente tranquilo",
         "Buena comunicación",
     ]
+
+
+def test_perfil_guarda_distrito_y_coincidencias_filtran(entorno):
+    servicio, _ = entorno
+    servicio.guardar_perfil(
+        1, perfil(distrito_id=1, edad=25, genero="femenino")
+    )
+    servicio.guardar_perfil(
+        2,
+        perfil(
+            presupuesto_min=Decimal("500"),
+            distrito_id=1,
+            edad=30,
+            genero="femenino",
+        ),
+    )
+    servicio.guardar_perfil(
+        3,
+        perfil(
+            presupuesto_min=Decimal("500"),
+            distrito_id=2,
+            edad=45,
+            genero="masculino",
+        ),
+    )
+
+    mismo = servicio.coincidencias(1, mismo_distrito=True)
+    por_genero = servicio.coincidencias(1, genero="masculino")
+    por_edad = servicio.coincidencias(1, edad_min=28, edad_max=32)
+
+    assert [c.buscador_id for c in mismo] == [2]
+    assert [c.buscador_id for c in por_genero] == [3]
+    assert [c.buscador_id for c in por_edad] == [2]
+    assert mismo[0].distrito_id == 1
+
+
+def test_coincidencias_rechazan_filtros_invalidos(entorno):
+    servicio, _ = entorno
+    servicio.guardar_perfil(1, perfil())
+
+    with pytest.raises(SolicitudInvalida, match="edad mínima"):
+        servicio.coincidencias(1, edad_min=40, edad_max=30)
+    with pytest.raises(SolicitudInvalida, match="género"):
+        servicio.coincidencias(1, genero="desconocido")
+    with pytest.raises(SolicitudInvalida, match="preferencia"):
+        servicio.coincidencias(1, genero_preferido="desconocido")
+
+
+def test_perfil_rechaza_distrito_inexistente(entorno):
+    servicio, _ = entorno
+
+    with pytest.raises(SolicitudInvalida, match="distrito"):
+        servicio.guardar_perfil(1, perfil(distrito_id=999))

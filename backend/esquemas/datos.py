@@ -113,10 +113,21 @@ class AlojamientoEntrada(BaseModel):
     descripcion: str = Field(min_length=5)
     precio: Decimal = Field(gt=0, max_digits=12, decimal_places=2)
     direccion: str = Field(min_length=5, max_length=250)
-    distrito: str = Field(min_length=2, max_length=100)
-    tipo: str = Field(min_length=2, max_length=40)
+    # Compatibilidad: clientes anteriores envían texto; los nuevos envían ids.
+    distrito: str | None = Field(default=None, min_length=2, max_length=100)
+    distrito_id: int | None = Field(default=None, gt=0)
+    tipo: str | None = Field(default=None, min_length=2, max_length=40)
+    tipo_id: int | None = Field(default=None, gt=0)
     estado: Literal['activo','inactivo','alquilado'] = 'activo'
     comodidad_ids: list[int] = Field(default_factory=list)
+
+    @model_validator(mode='after')
+    def ubicacion_o_texto(self):
+        if self.distrito_id is None and not self.distrito:
+            raise ValueError('Indica el distrito')
+        if self.tipo_id is None and not self.tipo:
+            raise ValueError('Indica el tipo de alojamiento')
+        return self
 
 class AlojamientoEditar(BaseModel):
     titulo: str | None = Field(default=None, min_length=3, max_length=150)
@@ -124,7 +135,9 @@ class AlojamientoEditar(BaseModel):
     precio: Decimal | None = Field(default=None, gt=0, max_digits=12, decimal_places=2)
     direccion: str | None = Field(default=None, min_length=5, max_length=250)
     distrito: str | None = Field(default=None, min_length=2, max_length=100)
+    distrito_id: int | None = Field(default=None, gt=0)
     tipo: str | None = Field(default=None, min_length=2, max_length=40)
+    tipo_id: int | None = Field(default=None, gt=0)
     estado: Literal['activo','inactivo','alquilado'] | None = None
     comodidad_ids: list[int] | None = None
 
@@ -136,7 +149,13 @@ class AlojamientoSalida(LecturaBase):
     precio: Decimal
     direccion: str
     distrito: str
+    distrito_id: int | None = None
+    distrito_completo: str | None = None
+    provincia_nombre: str | None = None
+    departamento_nombre: str | None = None
     tipo: str
+    tipo_id: int | None = None
+    tipo_nombre: str | None = None
     estado: str
     destacado: bool
     fecha_publicacion: datetime
@@ -165,6 +184,7 @@ class PerfilEntrada(BaseModel):
     genero: Literal['femenino', 'masculino', 'otro', 'prefiero_no_decir'] | None = None
     genero_preferido: Literal['femenino', 'masculino', 'mixto', 'indiferente'] | None = None
     edad: int | None = Field(default=None, ge=18, le=99)
+    distrito_id: int | None = Field(default=None, gt=0)
 
     descripcion: str | None = Field(default=None, max_length=500)
     estado: Literal['activo','inactivo'] = 'activo'
@@ -209,6 +229,7 @@ class PerfilSalida(PerfilEntrada, LecturaBase):
     buscador_id: int
     habito_nombres: list[str] = Field(default_factory=list)
     preferencia_nombres: list[str] = Field(default_factory=list)
+    distrito_completo: str | None = None
     actualizado_en: datetime | None = None
 
 
@@ -237,6 +258,8 @@ class CoincidenciaSalida(LecturaBase):
     genero: str | None = None
     genero_preferido: str | None = None
     edad: int | None = None
+    distrito_id: int | None = None
+    distrito_completo: str | None = None
     compatibilidad: int = 0
     # La ruta interna no se publica; la interfaz solo necesita la URL.
     foto_perfil: bool = Field(default=False, exclude=True)
@@ -269,12 +292,16 @@ class HabitoCatalogoSalida(LecturaBase):
     habito_id: int
     nombre: str
     categoria: str
+    orden: int = 0
+    activo: bool = True
 
 
 class PreferenciaCatalogoSalida(LecturaBase):
     preferencia_id: int
     nombre: str
     categoria: str
+    orden: int = 0
+    activo: bool = True
 
 
 class OpcionSalida(BaseModel):
@@ -293,3 +320,106 @@ class CatalogosSalida(BaseModel):
     habitos: list[HabitoCatalogoSalida]
     preferencias: list[PreferenciaCatalogoSalida]
     opciones: OpcionesPerfilSalida
+
+
+# --- UBIGEO -----------------------------------------------------------------
+
+class DistritoSalida(LecturaBase):
+    distrito_id: int
+    codigo: str
+    nombre: str
+
+
+class ProvinciaSalida(LecturaBase):
+    provincia_id: int
+    codigo: str
+    nombre: str
+    distritos: list[DistritoSalida] = Field(default_factory=list)
+
+
+class DepartamentoSalida(LecturaBase):
+    departamento_id: int
+    codigo: str
+    nombre: str
+    provincias: list[ProvinciaSalida] = Field(default_factory=list)
+
+
+# --- Catálogos administrables -------------------------------------------------
+
+class TipoAlojamientoSalida(LecturaBase):
+    tipo_id: int
+    codigo: str
+    nombre: str
+    descripcion: str | None = None
+    orden: int
+    activo: bool
+
+
+class TipoAlojamientoEntrada(BaseModel):
+    codigo: str = Field(min_length=2, max_length=40, pattern=r'^[a-z0-9_]+$')
+    nombre: str = Field(min_length=2, max_length=60)
+    descripcion: str | None = Field(default=None, max_length=200)
+    orden: int = Field(default=0, ge=0, le=999)
+
+
+class TipoAlojamientoEditar(BaseModel):
+    nombre: str | None = Field(default=None, min_length=2, max_length=60)
+    descripcion: str | None = Field(default=None, max_length=200)
+    orden: int | None = Field(default=None, ge=0, le=999)
+    activo: bool | None = None
+
+
+class EstadoCatalogoSalida(LecturaBase):
+    dominio: str
+    codigo: str
+    nombre: str
+    descripcion: str | None = None
+    orden: int
+    activo: bool
+
+
+class EstadoCatalogoEditar(BaseModel):
+    nombre: str | None = Field(default=None, min_length=2, max_length=60)
+    descripcion: str | None = Field(default=None, max_length=200)
+    orden: int | None = Field(default=None, ge=0, le=999)
+    activo: bool | None = None
+
+
+class HabitoCatalogoEntrada(BaseModel):
+    nombre: str = Field(min_length=2, max_length=80)
+    categoria: Literal['convivencia', 'rutina', 'ocio'] = 'convivencia'
+    orden: int = Field(default=0, ge=0, le=999)
+    activo: bool = True
+
+
+class HabitoCatalogoEditar(BaseModel):
+    nombre: str | None = Field(default=None, min_length=2, max_length=80)
+    categoria: Literal['convivencia', 'rutina', 'ocio'] | None = None
+    orden: int | None = Field(default=None, ge=0, le=999)
+    activo: bool | None = None
+
+
+class PreferenciaCatalogoEntrada(BaseModel):
+    nombre: str = Field(min_length=2, max_length=100)
+    categoria: Literal['convivencia', 'perfil'] = 'convivencia'
+    orden: int = Field(default=0, ge=0, le=999)
+    activo: bool = True
+
+
+class PreferenciaCatalogoEditar(BaseModel):
+    nombre: str | None = Field(default=None, min_length=2, max_length=100)
+    categoria: Literal['convivencia', 'perfil'] | None = None
+    orden: int | None = Field(default=None, ge=0, le=999)
+    activo: bool | None = None
+
+
+class CatalogosAlojamientoSalida(BaseModel):
+    tipos: list[TipoAlojamientoSalida]
+    departamentos: list[DepartamentoSalida]
+
+
+class CatalogosAdminSalida(BaseModel):
+    tipos: list[TipoAlojamientoSalida]
+    estados: list[EstadoCatalogoSalida]
+    habitos: list[HabitoCatalogoSalida]
+    preferencias: list[PreferenciaCatalogoSalida]

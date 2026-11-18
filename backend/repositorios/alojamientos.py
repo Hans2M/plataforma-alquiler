@@ -9,6 +9,8 @@ from modelos.alojamiento import (
     Comodidad,
     ImagenAlojamiento,
 )
+from modelos.catalogos import TipoAlojamiento
+from modelos.ubigeo import Departamento, Distrito, Provincia
 from modelos.usuario import Usuario
 
 
@@ -29,12 +31,27 @@ class RepositorioAlojamientosSQLAlchemy:
         precio_min: float | None = None,
         dias: int | None = None,
         orden: str = "recientes",
+        distrito_id: int | None = None,
+        provincia_id: int | None = None,
+        departamento_id: int | None = None,
     ) -> list[Alojamiento]:
         st = select(Alojamiento).where(Alojamiento.estado == "activo")
         if distrito:
             st = st.where(Alojamiento.distrito.ilike(f"%{distrito.strip()}%"))
         if tipo:
             st = st.where(Alojamiento.tipo.ilike(f"%{tipo.strip()}%"))
+        if distrito_id is not None:
+            st = st.where(Alojamiento.distrito_id == distrito_id)
+        if provincia_id is not None or departamento_id is not None:
+            st = st.join(
+                Distrito, Distrito.distrito_id == Alojamiento.distrito_id
+            )
+            if provincia_id is not None:
+                st = st.where(Distrito.provincia_id == provincia_id)
+            if departamento_id is not None:
+                st = st.join(
+                    Provincia, Provincia.provincia_id == Distrito.provincia_id
+                ).where(Provincia.departamento_id == departamento_id)
         if precio_min is not None:
             st = st.where(Alojamiento.precio >= precio_min)
         if precio_max is not None:
@@ -135,3 +152,9 @@ class RepositorioAlojamientosSQLAlchemy:
         if alojamiento is None:
             return None
         return self.db.get(Usuario, alojamiento.arrendador_id)
+
+    def distrito(self, distrito_id: int) -> Distrito | None:
+        return self.db.get(Distrito, distrito_id)
+
+    def tipo(self, tipo_id: int) -> TipoAlojamiento | None:
+        return self.db.get(TipoAlojamiento, tipo_id)

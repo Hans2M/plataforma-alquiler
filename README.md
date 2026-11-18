@@ -8,7 +8,7 @@
 
 ## 1. Propósito y personas usuarias
 
-El sistema está dirigido al **público general**. Un **visitante** puede buscar y consultar alojamientos activos sin registrarse. Un **buscador** puede registrarse, gestionar su perfil, consultar coincidencias de convivencia y solicitar verificación de identidad. Un **arrendador** puede publicar y administrar sus inmuebles; además puede explorar el catálogo público para comparar el mercado, sin acceder a los datos de contacto de otras publicaciones. El **administrador** gestiona cuentas y decide sobre solicitudes de identidad. No hay pagos, reservas ni contratos digitales.
+El sistema está dirigido al **público general**. Un **visitante** puede buscar y consultar alojamientos activos sin registrarse. Un **buscador** puede registrarse, gestionar su perfil, consultar coincidencias de convivencia con filtros por distrito, edad y género, y solicitar verificación de identidad. Un **arrendador** puede publicar y administrar sus inmuebles; además puede explorar el catálogo público para comparar el mercado, sin acceder a los datos de contacto de otras publicaciones. El **administrador** gestiona cuentas y decide sobre solicitudes de identidad. No hay pagos, reservas ni contratos digitales.
 
 ## 2. Antes de comenzar
 
@@ -28,7 +28,7 @@ El sistema está dirigido al **público general**. Un **visitante** puede buscar
    ```
 
 4. Abre **http://localhost:5173** (frontend) y **http://localhost:8000/docs** (Swagger API). La comprobación de salud: **http://localhost:8000/api/salud**.
-5. El DDL PostgreSQL se aplica automáticamente cuando arranca **por primera vez** un volumen vacío. El esquema es `alquiler`.
+5. El DDL PostgreSQL se aplica automáticamente cuando arranca **por primera vez** un volumen vacío. El esquema es `alquiler` e incluye las migraciones aditivas `04`, `05` y `06` (perfil de convivencia, UBIGEO/catálogos y migración de textos heredados).
 6. Para el rol administrador, ejecuta el asistente interactivo:
 
    ```bash
@@ -166,8 +166,13 @@ Con esto se refuerzan SRP y DIP en el backend. Quedan decisiones no SOLID hereda
 | `alquiler.perfil_preferencias` | Asociación M:N perfil–preferencia, clave compuesta |
 | `alquiler.verificaciones_identidad` | Solicitud, estado, revisor y observación |
 | `alquiler.registros_acceso` | Acciones de autenticación y acceso |
+| `alquiler.ubigeo_departamentos` | Departamentos del Perú (INEI 2026) |
+| `alquiler.ubigeo_provincias` | Provincias por departamento |
+| `alquiler.ubigeo_distritos` | Distritos por provincia; referencia de alojamientos y perfiles |
+| `alquiler.tipos_alojamiento` | Catálogo administrable de tipos de alojamiento |
+| `alquiler.catalogo_estados` | Etiquetas editables de estados por dominio |
 
-**Integridad:** PK/FK, UNIQUE, NOT NULL, CHECK, defaults e índices. Las autorizaciones de propietario y rol se refuerzan en FastAPI; una FK por sí sola no garantiza que un revisor sea administrador.
+**Integridad:** PK/FK, UNIQUE, NOT NULL, CHECK, defaults e índices. Los estados se refuerzan con FK compuestas contra `catalogo_estados` mediante columnas de dominio generadas. Las autorizaciones de propietario y rol se refuerzan en FastAPI; una FK por sí sola no garantiza que un revisor sea administrador.
 
 `sql/01_esquema_alquiler.sql` es el **mismo DDL de la sección 4.6**; no realiza `DROP`, no cambia otras bases y se importa automáticamente con PostgreSQL solo cuando el volumen está vacío. En futuros cambios de esquema se recomienda añadir Alembic y migraciones versionadas, en vez de editar el SQL inicial de una base ya utilizada.
 
@@ -193,6 +198,25 @@ En un volumen nuevo se ejecuta automáticamente después de `01_esquema_alquiler
 
 La compatibilidad entre perfiles se calcula en `backend/dominio/compatibilidad.py`: 50 puntos por presupuestos solapados, hasta 20 por hábitos en común, hasta 20 por preferencias en común y 5 por cada campo tipado coincidente (máximo 100).
 
+### 4.2 UBIGEO y catálogos administrables
+
+`sql/05_ubigeo_y_catalogos.sql` normaliza la ubicación y convierte los valores fijos en catálogos editables, **sin borrar columnas ni romper clientes anteriores**:
+
+- `ubigeo_departamentos` → `ubigeo_provincias` → `ubigeo_distritos`, con los datos oficiales del INEI 2026 (25 departamentos, 196 provincias y 1892 distritos).
+- `alojamientos.distrito_id` y `perfiles_companero.distrito_id` como FK al distrito; las columnas de texto `distrito` y `tipo` se conservan como respaldo histórico.
+- `tipos_alojamiento`: tipos con código fijo, nombre, descripción, orden y estado; el administrador puede crear y desactivar tipos.
+- `catalogo_estados`: una tabla genérica por dominio (`cuenta`, `alojamiento`, `verificacion`, `perfil`, `acceso`). Los códigos los fija la aplicación; se editan etiqueta, descripción, orden y visibilidad.
+- FK compuestas para reforzar los estados y los tipos, con índices para búsquedas por distrito y departamento.
+
+`sql/06_migracion_textos_convivencia.sql` completa los catálogos del perfil a partir de los textos heredados `habitos` y `preferencias`. Es idempotente y **no modifica el texto original**: solo agrega filas reconocidas en `perfil_habitos` y `perfil_preferencias`. Los textos que no coinciden con ninguna frase conocida permanecen intactos y siguen visibles como respaldo.
+
+```bash
+docker compose exec -T db psql -v ON_ERROR_STOP=1 -U alquiler_app -d alquiler_db < sql/05_ubigeo_y_catalogos.sql
+docker compose exec -T db psql -v ON_ERROR_STOP=1 -U alquiler_app -d alquiler_db < sql/06_migracion_textos_convivencia.sql
+```
+
+En un volumen nuevo, `05` y `06` se ejecutan automáticamente después de `04`.
+
 ## 5. Endpoints principales (Swagger: /docs)
 
 | Método / ruta | Acceso | Estado inicial |
@@ -205,7 +229,7 @@ La compatibilidad entre perfiles se calcula en `backend/dominio/compatibilidad.p
 | `POST/DELETE /api/usuarios/me/foto` | Autenticado | Foto de perfil con validación de JPG, PNG o WebP (máx. 5 MB) |
 | `GET /api/usuarios/{id}/foto` | Público | Sirve la foto de perfil; no expone datos de contacto |
 | `GET /api/usuarios/me/accesos` | Titular | Implementado |
-| `GET /api/alojamientos` y `GET /api/alojamientos/{id}` | Público | Implementado con filtros y paginación |
+| `GET /api/alojamientos` y `GET /api/alojamientos/{id}` | Público | Filtros por texto, tipo, precio, fechas, UBIGEO y orden, con paginación |
 | `GET /api/alojamientos/comodidades` | Público | Implementado; catálogo se carga por SQL |
 | `POST /api/alojamientos` | Arrendador | Implementado |
 | `PATCH/DELETE /api/alojamientos/{id}` | Arrendador dueño | Implementado; DELETE desactiva |
@@ -214,7 +238,14 @@ La compatibilidad entre perfiles se calcula en `backend/dominio/compatibilidad.p
 | `GET /api/alojamientos/{id}/contacto` | Buscador | Nombre y teléfono del arrendador para contacto por WhatsApp; el catálogo sigue siendo público |
 | `GET/PUT /api/companeros/mi-perfil` | Buscador | Perfil con catálogos de hábitos/preferencias y campos tipados |
 | `GET /api/companeros/catalogos` | Público | Catálogos y opciones para construir el perfil |
-| `GET /api/companeros/coincidencias` | Buscador | Coincidencia por presupuestos solapados, ordenada por compatibilidad, con nombre y teléfono para WhatsApp |
+| `GET /api/companeros/coincidencias` | Buscador | Coincidencias ordenadas por compatibilidad; filtros por edad, género, género preferido y mismo distrito |
+| `GET /api/catalogos/alojamientos` | Público | Tipos activos y árbol UBIGEO para formularios y filtros |
+| `GET /api/catalogos/estados` | Público | Etiquetas de estado por dominio |
+| `GET /api/administracion/catalogos` | Administrador | Todos los catálogos, incluidos los inactivos |
+| `POST/PATCH /api/administracion/catalogos/tipos` | Administrador | Crear y editar tipos de alojamiento |
+| `PATCH /api/administracion/catalogos/estados/{dominio}/{codigo}` | Administrador | Editar etiqueta, orden y visibilidad de un estado |
+| `POST/PATCH /api/administracion/catalogos/habitos` | Administrador | Crear y editar hábitos |
+| `POST/PATCH /api/administracion/catalogos/preferencias` | Administrador | Crear y editar preferencias |
 | `POST /api/verificaciones/solicitar` | Autenticado | Implementado, documentos privados |
 | `GET /api/verificaciones/mi-estado` | Solicitante | Implementado |
 | `GET /api/administracion/usuarios` | Administrador | Listado de hasta 100 |
@@ -231,19 +262,21 @@ La compatibilidad entre perfiles se calcula en `backend/dominio/compatibilidad.p
   "descripcion": "Habitación amoblada, con baño compartido y escritorio",
   "precio": 450.00,
   "direccion": "Av. de ejemplo 123",
-  "distrito": "Tingo María",
-  "tipo": "habitacion",
+  "distrito_id": 959,
+  "tipo_id": 1,
   "estado": "activo",
   "comodidad_ids": []
 }
 ```
 
+El backend deriva `distrito` y `tipo` desde los catálogos cuando se envían los ids. Los clientes anteriores pueden seguir enviando solo los textos `distrito` y `tipo`.
+
 ## 6. Correspondencia con los 30 RF y 30 RNF
 
 El documento del curso plantea **30 RF / 30 RNF**, pero este repositorio es una **base para implementarlos progresivamente**:
 
-- **Implementado en la base:** registros, ingreso, roles en API, consulta y edición limitada del perfil, foto de perfil con carga y retiro, historial, CRUD inicial de inmuebles (retiro lógico), consulta pública, paginación, subida de imágenes con portada y galería, detalle público, contacto autenticado con el arrendador por WhatsApp, único perfil de convivencia con resumen editable y catálogos tipados, coincidencias ordenadas por compatibilidad con datos de contacto, solicitud/revisión de identidad y gestión inicial de cuentas.
-- **Parcialmente implementado:** cierre de sesión (borra el token del navegador, pero el JWT emitido sigue siendo válido hasta expirar), filtros de precio (solo máximo), selección de comodidades en el frontend, coincidencia basada únicamente en presupuesto, destacados (ordenamiento sin panel para asignarlos), paneles con métricas y filtros administrativos.
+- **Implementado en la base:** registros, ingreso, roles en API, consulta y edición limitada del perfil, foto de perfil con carga y retiro, historial, CRUD inicial de inmuebles (retiro lógico), consulta pública, paginación, subida de imágenes con portada y galería, detalle público, contacto autenticado con el arrendador por WhatsApp, único perfil de convivencia con resumen editable y catálogos tipados, coincidencias ordenadas por compatibilidad con filtros por distrito/edad/género y datos de contacto, ubicación normalizada con UBIGEO, catálogos administrables de tipos y estados, migración de textos heredados, solicitud/revisión de identidad y gestión inicial de cuentas.
+- **Parcialmente implementado:** cierre de sesión (borra el token del navegador, pero el JWT emitido sigue siendo válido hasta expirar), selección de comodidades en el frontend, destacados (ordenamiento sin panel para asignarlos), paneles con métricas y filtros administrativos.
 - **Pendiente:** eliminación formal de cuenta conforme a política de conservación, revocación de tokens, paginación completa de todas las listas, funcionalidades avanzadas de coincidencias, historial/auditoría de cambios, migraciones Alembic, suite completa de pruebas, gestión de imágenes (orden/retiro), respaldo/recuperación automatizada y cumplimiento verificado de RNF-08/09, RNF-15, RNF-19/20.
 
 **Los objetivos de RPO=24 h y RTO=8 h son metas del informe, no capacidades ya demostradas.** Tampoco se ha realizado carga de 50 usuarios concurrentes, ni auditoría de accesibilidad o seguridad.
@@ -288,8 +321,7 @@ docker compose ps
 
 - Completar diagramas, DTOs, contratos y cobertura total de RF/RNF.
 - Añadir Alembic, pruebas de integración, pruebas de carga, control de errores consistente, monitoreo y métricas.
-- Refinar el matching con filtros por distrito, edad y género preferido, y migrar los textos heredados a los catálogos.
-- Modelar UBIGEO (departamento/provincia/distrito) y catálogos administrables de estados y tipos.
+- Ampliar la depuración de textos heredados que aún no coinciden con el catálogo y definir una política de edición masiva.
 - Implementar solicitud de eliminación de cuenta y política de retención.
 - Crear despliegue de producción (Vite `build`, servidor estático y proxy HTTPS, procesos backend, respaldos restaurables).
 

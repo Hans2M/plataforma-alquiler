@@ -5,6 +5,7 @@ from fastapi.responses import JSONResponse
 from api.administracion.router import router as administracion_router
 from api.alojamientos.router import router as alojamientos_router
 from api.autenticacion.router import router as auth_router
+from api.catalogos.router import router as catalogos_router
 from api.companeros.router import router as companeros_router
 from api.usuarios.router import router as usuarios_router
 from api.verificaciones.router import router as verificaciones_router
@@ -21,7 +22,7 @@ async def manejar_error_dominio(_: Request, exc: ErrorDominio):
     return JSONResponse(status_code=exc.codigo, content={'detail': exc.mensaje})
 
 
-for router in (auth_router, usuarios_router, alojamientos_router, companeros_router, verificaciones_router, administracion_router):
+for router in (auth_router, usuarios_router, alojamientos_router, companeros_router, catalogos_router, verificaciones_router, administracion_router):
     app.include_router(router)
 
 @app.get('/api/salud', tags=['Salud'])

@@ -90,7 +90,7 @@ export default function DetalleAlojamiento({ usuario }) {
           {principal
             ? <img className="fotoPrincipal" src={principal} alt={`Foto de ${item.titulo}`} />
             : <span aria-hidden="true">⌂</span>}
-          <span className="chip chipTipo">{item.tipo}</span>
+          <span className="chip chipTipo">{item.tipo_nombre || item.tipo}</span>
         </div>
         {imagenes.length > 1 && <div className="miniaturas" aria-label="Galería de fotos">
           {imagenes.map((foto, indice) => <button
@@ -105,7 +105,7 @@ export default function DetalleAlojamiento({ usuario }) {
         </div>}
 
         <div className="panel detalleDescripcion">
-          <p className="etiqueta">{item.distrito}</p>
+          <p className="etiqueta">{item.distrito_completo || item.distrito}</p>
           <h1>{item.titulo}</h1>
           <p className="detalleDireccion">📍 {item.direccion}</p>
           <p className="detallePrecio">S/ {Number(item.precio).toFixed(2)} <small>/ mes</small></p>

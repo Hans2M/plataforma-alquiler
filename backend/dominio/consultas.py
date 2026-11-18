@@ -42,6 +42,8 @@ class CoincidenciaCompanero:
     genero: str | None = None
     genero_preferido: str | None = None
     edad: int | None = None
+    distrito_id: int | None = None
+    distrito_completo: str | None = None
     compatibilidad: int = 0
 
 
